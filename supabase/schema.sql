@@ -1,9 +1,9 @@
 create extension if not exists pgcrypto;
 
-create type public.user_role as enum ('participant', 'admin');
-create type public.profile_status as enum ('pending', 'active', 'blocked');
-create type public.season_status as enum ('draft', 'registration', 'active', 'finished', 'cancelled');
-create type public.season_participant_status as enum ('pending_payment', 'pending_approval', 'active', 'eliminated', 'withdrawn');
+do $$ begin create type public.user_role as enum ('participant', 'admin'); exception when duplicate_object then null; end $$;
+do $$ begin create type public.profile_status as enum ('pending', 'active', 'blocked'); exception when duplicate_object then null; end $$;
+do $$ begin create type public.season_status as enum ('draft', 'registration', 'active', 'finished', 'cancelled'); exception when duplicate_object then null; end $$;
+do $$ begin create type public.season_participant_status as enum ('pending_payment', 'pending_approval', 'active', 'eliminated', 'withdrawn'); exception when duplicate_object then null; end $$;
 
 create table public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
@@ -127,6 +127,19 @@ create table if not exists public.activity_sessions (
 create unique index if not exists activity_sessions_one_active_idx on public.activity_sessions(user_id) where status = 'active';
 create index if not exists activity_sessions_validation_idx on public.activity_sessions(status, created_at);
 
+create table if not exists public.activity_score_contributions (
+  id uuid primary key default gen_random_uuid(),
+  activity_session_id uuid not null unique references public.activity_sessions(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  season_id uuid not null references public.seasons(id) on delete cascade,
+  score_date date not null,
+  consistency_points integer not null default 0 check (consistency_points >= 0),
+  evolution_points integer not null default 0 check (evolution_points >= 0),
+  volume_points integer not null default 0 check (volume_points >= 0),
+  created_at timestamptz not null default now()
+);
+create index if not exists activity_score_contributions_daily_idx on public.activity_score_contributions(user_id, season_id, score_date);
+
 create table if not exists public.activity_proofs (
   id uuid primary key default gen_random_uuid(),
   activity_session_id uuid not null references public.activity_sessions(id) on delete cascade,
@@ -160,7 +173,10 @@ create table if not exists public.wildcards (
   id uuid primary key default gen_random_uuid(),
   season_id uuid not null references public.seasons(id) on delete cascade,
   user_id uuid not null references public.profiles(id) on delete cascade,
-  used_on date,
+  activity_session_id uuid not null unique references public.activity_sessions(id) on delete restrict,
+  used_on date not null,
+  reason text not null check (char_length(reason) between 2 and 240),
+  context jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   unique (season_id, user_id, used_on)
 );
@@ -250,6 +266,8 @@ begin
   if not public.is_admin() then raise exception 'admin access required'; end if;
   if p_approved then next_status := 'validated'; else next_status := 'rejected'; end if;
   if not p_approved and nullif(trim(p_rejection_reason), '') is null then raise exception 'rejection reason is required'; end if;
+  select * into target from public.activity_sessions where id = p_session_id;
+  if target.status = next_status then return target; end if;
   update public.activity_sessions set status = next_status, updated_at = now() where id = p_session_id and status = 'pending_validation' returning * into target;
   if target.id is null then raise exception 'activity pending validation not found'; end if;
   insert into public.audit_logs (actor_id, entity_type, entity_id, action, metadata)
@@ -272,6 +290,7 @@ declare
   evolution integer;
   volume integer;
   completed_days integer;
+  contribution_id uuid;
 begin
   select * into activity from public.activity_sessions where id = p_session_id and status = 'validated';
   if activity.id is null then raise exception 'validated activity not found'; end if;
@@ -287,13 +306,20 @@ begin
   consistency := case when coalesce(activity.duration_seconds, 0) >= 1800 then 10 else 0 end;
   evolution := case when baseline.frozen_at is not null and baseline.average_active_minutes > 0 then least(25, greatest(0, floor((((activity.duration_seconds / 60.0) / baseline.average_active_minutes - 1) * 100) / 2)::integer)) else 0 end;
   volume := least(20, floor((met_value * coalesce(activity.duration_seconds, 0) / 60) / 40)::integer);
+  insert into public.activity_score_contributions (activity_session_id, user_id, season_id, score_date, consistency_points, evolution_points, volume_points)
+  values (activity.id, activity.user_id, activity.season_id, activity.started_at::date, consistency, evolution, volume)
+  on conflict (activity_session_id) do nothing
+  returning id into contribution_id;
+  if contribution_id is null then return; end if;
+  select count(*) into completed_days from public.activity_score_contributions where user_id = activity.user_id and season_id = activity.season_id and score_date between week_start and week_start + 5 and consistency_points >= 10;
   insert into public.daily_scores (user_id, season_id, score_date, consistency_points, evolution_points, volume_points)
-  values (activity.user_id, activity.season_id, activity.started_at::date, consistency, evolution, volume)
-  on conflict (user_id, season_id, score_date) do update set consistency_points = greatest(daily_scores.consistency_points, excluded.consistency_points), evolution_points = greatest(daily_scores.evolution_points, excluded.evolution_points), volume_points = least(20, daily_scores.volume_points + excluded.volume_points), calculated_at = now();
-  select count(*) into completed_days from public.daily_scores where user_id = activity.user_id and season_id = activity.season_id and score_date between week_start and week_start + 5 and consistency_points >= 10;
+  select activity.user_id, activity.season_id, score_date, least(60, sum(consistency_points)), least(25, sum(evolution_points)), least(20, sum(volume_points))
+  from public.activity_score_contributions where user_id = activity.user_id and season_id = activity.season_id and score_date = activity.started_at::date
+  group by score_date
+  on conflict (user_id, season_id, score_date) do update set consistency_points = excluded.consistency_points, evolution_points = excluded.evolution_points, volume_points = excluded.volume_points, calculated_at = now();
   insert into public.weekly_scores (user_id, season_id, week_number, consistency_points, evolution_points, volume_points, bonus_points, completed_days)
   select activity.user_id, activity.season_id, week_number, least(60, coalesce(sum(consistency_points), 0)), least(25, coalesce(sum(evolution_points), 0)), least(20, coalesce(sum(volume_points), 0)), case when completed_days >= 5 then 15 else 0 end, least(6, completed_days)
-  from public.daily_scores where user_id = activity.user_id and season_id = activity.season_id and score_date between week_start and week_start + 5
+  from public.activity_score_contributions where user_id = activity.user_id and season_id = activity.season_id and score_date between week_start and week_start + 5
   on conflict (user_id, season_id, week_number) do update set consistency_points = excluded.consistency_points, evolution_points = excluded.evolution_points, volume_points = excluded.volume_points, bonus_points = excluded.bonus_points, completed_days = excluded.completed_days, updated_at = now();
 end;
 $$;
@@ -303,6 +329,8 @@ returns public.payments language plpgsql security definer set search_path = publ
 declare target public.payments;
 begin
   if not public.is_admin() then raise exception 'admin access required'; end if;
+  select * into target from public.payments where id = p_payment_id;
+  if target.payment_status = 'confirmed' then return target; end if;
   update public.payments set payment_status = 'confirmed', confirmed_at = now(), confirmed_by = auth.uid(), updated_at = now() where id = p_payment_id and payment_status in ('pending', 'submitted') returning * into target;
   if target.id is null then raise exception 'payment pending confirmation not found'; end if;
   update public.season_participants set status = 'active', approved_at = now() where season_id = target.season_id and user_id = target.user_id and status in ('pending_payment', 'pending_approval');
@@ -318,6 +346,8 @@ declare target public.payments;
 begin
   if not public.is_admin() then raise exception 'admin access required'; end if;
   if nullif(trim(p_reason), '') is null then raise exception 'rejection reason is required'; end if;
+  select * into target from public.payments where id = p_payment_id;
+  if target.payment_status = 'rejected' then return target; end if;
   update public.payments set payment_status = 'rejected', confirmed_at = null, confirmed_by = auth.uid(), updated_at = now() where id = p_payment_id and payment_status in ('pending', 'submitted') returning * into target;
   if target.id is null then raise exception 'payment pending rejection not found'; end if;
   insert into public.audit_logs (actor_id, entity_type, entity_id, action, metadata)
@@ -395,6 +425,43 @@ $$;
 create trigger payments_protected_fields before update on public.payments
 for each row execute function public.prevent_participant_payment_changes();
 
+create or replace function public.enforce_two_wildcards()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare wildcard_count integer;
+begin
+  perform pg_advisory_xact_lock(hashtextextended(new.user_id::text || ':' || new.season_id::text, 0));
+  select count(*) into wildcard_count from public.wildcards where user_id = new.user_id and season_id = new.season_id;
+  if wildcard_count >= 2 then raise exception 'maximum of two wildcards per season reached'; end if;
+  return new;
+end;
+$$;
+
+create trigger wildcards_two_per_season before insert on public.wildcards
+for each row execute function public.enforce_two_wildcards();
+
+create or replace function public.apply_wildcard(p_season_id uuid, p_activity_session_id uuid, p_reason text, p_context jsonb default '{}'::jsonb)
+returns public.wildcards language plpgsql security definer set search_path = public as $$
+declare target_session public.activity_sessions; existing_wildcard public.wildcards; created_wildcard public.wildcards;
+begin
+  if auth.uid() is null then raise exception 'authentication required'; end if;
+  if nullif(trim(p_reason), '') is null then raise exception 'wildcard reason is required'; end if;
+  select * into existing_wildcard from public.wildcards where season_id = p_season_id and user_id = auth.uid() and activity_session_id = p_activity_session_id;
+  if existing_wildcard.id is not null then return existing_wildcard; end if;
+  select * into target_session from public.activity_sessions where id = p_activity_session_id and season_id = p_season_id and user_id = auth.uid() and status in ('completed', 'pending_validation', 'validated');
+  if target_session.id is null then raise exception 'activity session is not eligible for wildcard'; end if;
+  insert into public.wildcards (season_id, user_id, activity_session_id, used_on, reason, context)
+  values (p_season_id, auth.uid(), p_activity_session_id, target_session.started_at::date, p_reason, coalesce(p_context, '{}'::jsonb))
+  returning * into created_wildcard;
+  insert into public.audit_logs (actor_id, entity_type, entity_id, action, metadata)
+  values (auth.uid(), 'wildcard', created_wildcard.id, 'applied', jsonb_build_object('season_id', p_season_id, 'activity_session_id', p_activity_session_id, 'reason', p_reason));
+  return created_wildcard;
+exception when unique_violation then
+  select * into existing_wildcard from public.wildcards where season_id = p_season_id and user_id = auth.uid() and activity_session_id = p_activity_session_id;
+  if existing_wildcard.id is not null then return existing_wildcard; end if;
+  raise;
+end;
+$$;
+
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
 declare
@@ -421,6 +488,7 @@ alter table public.season_participants enable row level security;
 alter table public.baseline_metrics enable row level security;
 alter table public.daily_scores enable row level security;
 alter table public.weekly_scores enable row level security;
+alter table public.activity_score_contributions enable row level security;
 alter table public.audit_logs enable row level security;
 alter table public.activity_sessions enable row level security;
 alter table public.activity_proofs enable row level security;
@@ -447,6 +515,8 @@ create policy "authenticated users view scores" on public.daily_scores for selec
 create policy "admins manage scores" on public.daily_scores for all to authenticated using (public.is_admin()) with check (public.is_admin());
 create policy "authenticated users view weekly scores" on public.weekly_scores for select to authenticated using (true);
 create policy "admins manage weekly scores" on public.weekly_scores for all to authenticated using (public.is_admin()) with check (public.is_admin());
+create policy "authenticated users view score contributions" on public.activity_score_contributions for select to authenticated using (user_id = auth.uid() or public.is_admin());
+create policy "admins manage score contributions" on public.activity_score_contributions for all to authenticated using (public.is_admin()) with check (public.is_admin());
 create policy "participants view own activity sessions" on public.activity_sessions for select to authenticated using (user_id = auth.uid() or public.is_admin());
 create policy "participants start own activity sessions" on public.activity_sessions for insert to authenticated with check (false);
 create policy "participants cannot update activity sessions" on public.activity_sessions for update to authenticated using (false) with check (false);
@@ -461,7 +531,7 @@ create policy "admins manage payments" on public.payments for all to authenticat
 create policy "participants view own wildcards" on public.wildcards for select to authenticated using (user_id = auth.uid() or public.is_admin());
 create policy "admins manage wildcards" on public.wildcards for all to authenticated using (public.is_admin()) with check (public.is_admin());
 create policy "admins view audit logs" on public.audit_logs for select to authenticated using (public.is_admin() or actor_id = auth.uid());
-create policy "service writes audit logs" on public.audit_logs for insert to authenticated with check (actor_id = auth.uid() or public.is_admin());
+create policy "participants cannot write audit logs" on public.audit_logs for insert to authenticated with check (false);
 
 create index profiles_role_status_idx on public.profiles(role, status);
 create index seasons_status_dates_idx on public.seasons(status, start_date, end_date);
@@ -477,6 +547,37 @@ insert into storage.buckets (id, name, public) values ('payment-proofs', 'paymen
 create policy "participants upload own payment proof" on storage.objects for insert to authenticated with check (bucket_id = 'payment-proofs' and (storage.foldername(name))[1] = auth.uid()::text);
 create policy "participants view own payment proof" on storage.objects for select to authenticated using (bucket_id = 'payment-proofs' and (storage.foldername(name))[1] = auth.uid()::text);
 create policy "admins view payment proofs" on storage.objects for select to authenticated using (bucket_id = 'payment-proofs' and public.is_admin());
+
+-- SECURITY DEFINER functions are never callable by anonymous users. Administrative
+-- RPCs still enforce public.is_admin() inside the transaction.
+revoke all on function public.start_activity_session(text) from public;
+revoke all on function public.finish_activity_session(uuid) from public;
+revoke all on function public.submit_activity_session(uuid) from public;
+revoke all on function public.edit_completed_activity_session(uuid, text) from public;
+revoke all on function public.request_season_participation(uuid) from public;
+revoke all on function public.admin_validate_activity(uuid, boolean, text) from public;
+revoke all on function public.confirm_payment(uuid) from public;
+revoke all on function public.reject_payment(uuid, text) from public;
+revoke all on function public.apply_wildcard(uuid, uuid, text, jsonb) from public;
+revoke all on function public.apply_validated_activity_score(uuid) from public;
+revoke all on function public.is_admin() from public;
+revoke all on function public.set_updated_at() from public;
+revoke all on function public.prevent_participant_protected_profile_changes() from public;
+revoke all on function public.prevent_frozen_baseline_changes() from public;
+revoke all on function public.prevent_participant_payment_changes() from public;
+revoke all on function public.enforce_two_wildcards() from public;
+revoke all on function public.handle_new_user() from public;
+
+grant execute on function public.start_activity_session(text) to authenticated;
+grant execute on function public.finish_activity_session(uuid) to authenticated;
+grant execute on function public.submit_activity_session(uuid) to authenticated;
+grant execute on function public.edit_completed_activity_session(uuid, text) to authenticated;
+grant execute on function public.request_season_participation(uuid) to authenticated;
+grant execute on function public.admin_validate_activity(uuid, boolean, text) to authenticated;
+grant execute on function public.confirm_payment(uuid) to authenticated;
+grant execute on function public.reject_payment(uuid, text) to authenticated;
+grant execute on function public.apply_wildcard(uuid, uuid, text, jsonb) to authenticated;
+grant execute on function public.is_admin() to authenticated;
 
 -- The definitive scoring, payment validation and activity validation must be implemented
 -- in privileged RPCs or Edge Functions before production. Never trust client totals.
