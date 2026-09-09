@@ -26,6 +26,7 @@ type AuthContextValue = {
   resetPassword: (email: string) => Promise<AuthResult>
   signOut: () => Promise<AuthResult>
   refreshProfile: () => Promise<void>
+  updateProfile: (input: { fullName: string; phone: string }) => Promise<AuthResult>
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
@@ -71,6 +72,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<AuthContextValue>(() => ({
     user: session?.user ?? null, profile, session, loading, configured: Boolean(supabase), refreshProfile,
+    updateProfile: async ({ fullName, phone }) => {
+      if (!supabase || !session?.user) return { error: new Error('Você precisa estar autenticado para editar o perfil.') }
+      const { error } = await supabase.from('profiles').update({ full_name: fullName.trim(), phone: phone.trim() || null }).eq('id', session.user.id)
+      if (!error) await refreshProfile()
+      return { error: error ? toError(error) : null }
+    },
     signIn: async (email, password) => {
       if (!supabase) return { error: new Error('Configure o Supabase para entrar na sua conta.') }
       const { error } = await supabase.auth.signInWithPassword({ email, password })
