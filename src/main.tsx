@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createRoot } from 'react-dom/client'
 import {
   Activity, ArrowUpRight, Award, Bell, BookOpen, Check, ChevronRight, CircleHelp,
   Flame, Footprints, Gauge, Home, Lock, Menu, MessageCircle, MoreHorizontal,
@@ -101,3 +102,5 @@ function RuleBlock({ title, text }: { title: string; text: string }) { return <a
 function RegisterModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) { return <div className="modal-backdrop" onMouseDown={onClose}><div className="register-modal" onMouseDown={e => e.stopPropagation()}><div className="modal-head"><div><span className="eyebrow">NOVO MOVIMENTO</span><h2>Registre sua vitória.</h2></div><button className="icon-button" onClick={onClose}><X size={20} /></button></div><RegisterForm onDone={onDone} /></div></div> }
 
 export default App
+
+createRoot(document.getElementById('root')!).render(<App />)
