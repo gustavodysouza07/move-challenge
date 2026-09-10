@@ -1,6 +1,7 @@
 -- 008_complete_activity_workflow.sql
--- Fecha o ciclo de atividade: pausas auditáveis, duração efetiva, cancelamento
--- e comprovante obrigatório. Aplicar manualmente no SQL Editor, após revisão.
+-- Fecha o ciclo de atividade: pausas auditáveis, duração líquida do tempo
+-- pausado, cancelamento de sessão e comprovante obrigatório.
+-- Aplicar manualmente no SQL Editor, após revisão.
 
 begin;
 
@@ -21,9 +22,10 @@ create unique index if not exists activity_pauses_one_open_idx
 create index if not exists activity_pauses_session_idx
   on public.activity_pauses(activity_session_id);
 
--- ------------------------------------------------- 2. Duração efetiva única
--- duration_seconds passa a SER a coluna gerada. É ela que
--- apply_validated_activity_score já consome; não criamos coluna paralela.
+-- ------------------------------------------------------ 2. Duração líquida
+-- duration_seconds JÁ é coluna gerada, mas a expressão instalada não desconta
+-- paused_seconds — o tempo pausado contaria como treino. Como coluna gerada é
+-- derivada, dropar e recriar apenas recalcula: nenhum dado é perdido.
 alter table public.activity_sessions
   add column if not exists paused_seconds integer not null default 0;
 
@@ -37,7 +39,7 @@ alter table public.activity_sessions
     end
   ) stored;
 
--- ------------------------------------------------------------- 3. Iniciar
+-- -------------------------------------------------------------- 3. Iniciar
 create or replace function public.start_activity_session(p_activity_type text)
 returns public.activity_sessions language plpgsql security definer set search_path = public as $$
 declare current_season public.seasons; created_session public.activity_sessions;
@@ -69,7 +71,7 @@ exception when unique_violation then
 end;
 $$;
 
--- -------------------------------------------------------------- 4. Pausar
+-- --------------------------------------------------------------- 4. Pausar
 create or replace function public.pause_activity_session(p_session_id uuid)
 returns public.activity_pauses language plpgsql security definer set search_path = public as $$
 declare created_pause public.activity_pauses;
@@ -92,7 +94,7 @@ exception when unique_violation then
 end;
 $$;
 
--- ------------------------------------------------------------- 5. Retomar
+-- -------------------------------------------------------------- 5. Retomar
 create or replace function public.resume_activity_session(p_session_id uuid)
 returns public.activity_sessions language plpgsql security definer set search_path = public as $$
 declare
@@ -124,9 +126,9 @@ begin
 end;
 $$;
 
--- ----------------------------------------------------------- 6. Finalizar
+-- ------------------------------------------------------------ 6. Finalizar
 -- Fecha pausa aberta automaticamente: recusar finalização com pausa aberta
--- deixa o usuário sem saída, já que só pode haver uma sessão ativa.
+-- deixaria o usuário sem saída, já que só pode haver uma sessão ativa.
 create or replace function public.finish_activity_session(p_session_id uuid)
 returns public.activity_sessions language plpgsql security definer set search_path = public as $$
 declare
@@ -169,7 +171,7 @@ begin
 end;
 $$;
 
--- ----------------------------------------------------------- 7. Cancelar
+-- ------------------------------------------------------------- 7. Cancelar
 -- Sem isto, uma sessão esquecida acima de 24h bloqueia o usuário para sempre.
 create or replace function public.cancel_activity_session(p_session_id uuid)
 returns public.activity_sessions language plpgsql security definer set search_path = public as $$
@@ -193,7 +195,7 @@ begin
 end;
 $$;
 
--- ------------------------------------------- 8. Envio com comprovante real
+-- -------------------------------------------- 8. Envio com comprovante real
 create unique index if not exists activity_proofs_session_unique_idx
   on public.activity_proofs(activity_session_id);
 
@@ -245,7 +247,7 @@ exception when unique_violation then
 end;
 $$;
 
--- ---------------------------------------------------------- 9. RLS/Storage
+-- ----------------------------------------------------------- 9. RLS/Storage
 alter table public.activity_pauses enable row level security;
 drop policy if exists "participants view own pauses" on public.activity_pauses;
 create policy "participants view own pauses" on public.activity_pauses
@@ -275,7 +277,7 @@ create policy "participants view own activity proof" on storage.objects
   using (bucket_id = 'activity-proofs'
          and ((storage.foldername(name))[1] = auth.uid()::text or public.is_admin()));
 
--- ------------------------------------------------------------ 10. Grants
+-- ------------------------------------------------------------- 10. Grants
 revoke all on function public.start_activity_session(text) from public;
 revoke all on function public.pause_activity_session(uuid) from public;
 revoke all on function public.resume_activity_session(uuid) from public;
