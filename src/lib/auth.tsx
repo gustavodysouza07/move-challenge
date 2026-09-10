@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js'
 import { supabase } from './supabase'
+import '../profile-menu.css'
 
 export type Profile = {
   id: string
@@ -8,6 +9,7 @@ export type Profile = {
   email: string
   phone: string | null
   avatar_url: string | null
+  avatar_emoji: string | null
   role: 'participant' | 'admin'
   status: 'pending' | 'active' | 'blocked'
   created_at: string
@@ -26,13 +28,80 @@ type AuthContextValue = {
   resetPassword: (email: string) => Promise<AuthResult>
   signOut: () => Promise<AuthResult>
   refreshProfile: () => Promise<void>
-  updateProfile: (input: { fullName: string; phone: string }) => Promise<AuthResult>
+  updateProfile: (input: { fullName?: string; phone?: string; avatarEmoji?: string | null }) => Promise<AuthResult>
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
 function toError(error: unknown) {
   return error instanceof Error ? error : new Error('Não foi possível concluir a operação.')
+}
+
+const profileEmojis = ['🏃', '🚴', '🏋️', '🔥', '⚡', '💪', '🦁', '🐯', '🐺', '🦊', '🐼', '🚀', '🌟', '💎', '🎯', '🏆']
+
+function ProfileMenuOverlay() {
+  const { profile, signOut, updateProfile } = useAuth()
+  const [open, setOpen] = useState(false)
+  const [emojiOpen, setEmojiOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target as Element
+      if (target.closest('[aria-label="Editar perfil"]')) {
+        setOpen(value => !value)
+        setEmojiOpen(false)
+        return
+      }
+      if (!target.closest('.profile-action-menu') && !target.closest('.profile-emoji-modal')) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  useEffect(() => {
+    const emoji = profile?.avatar_emoji || '🪩'
+    document.querySelectorAll<HTMLElement>('.profile-avatar, .avatar-button').forEach(element => {
+      if (element.firstChild) element.firstChild.nodeValue = emoji
+    })
+  }, [profile?.avatar_emoji])
+
+  const chooseEmoji = async (emoji: string) => {
+    setBusy(true)
+    setError('')
+    const result = await updateProfile({ avatarEmoji: emoji })
+    setBusy(false)
+    if (result.error) setError('Não foi possível atualizar seu emoji.')
+    else { setEmojiOpen(false); setOpen(false) }
+  }
+
+  const logout = async () => {
+    setBusy(true)
+    setError('')
+    const result = await signOut()
+    setBusy(false)
+    if (result.error) setError('Não foi possível sair agora. Tente novamente.')
+    else setOpen(false)
+  }
+
+  if (!profile) return null
+  return <>
+    {open && <div className="profile-action-menu" role="menu" aria-label="Ações do perfil">
+      <button role="menuitem" onClick={() => { setOpen(false); document.querySelector<HTMLInputElement>('.profile-edit-form input')?.focus() }}>Editar perfil</button>
+      <button role="menuitem" onClick={() => { setEmojiOpen(true); setError('') }}>Trocar emoji</button>
+      <button role="menuitem" disabled={busy} onClick={logout}>Sair</button>
+      {error && <span className="profile-menu-error" role="alert">{error}</span>}
+    </div>}
+    {emojiOpen && <div className="profile-emoji-modal" role="dialog" aria-modal="true" aria-label="Escolher emoji" onMouseDown={() => setEmojiOpen(false)}>
+      <div className="profile-emoji-panel" onMouseDown={event => event.stopPropagation()}>
+        <div className="modal-head"><div><span className="eyebrow">SEU AVATAR</span><h2>Escolha seu emoji.</h2></div><button className="icon-button" aria-label="Fechar" onClick={() => setEmojiOpen(false)}>×</button></div>
+        <div className="emoji-grid">{profileEmojis.map(emoji => <button key={emoji} disabled={busy} aria-label={`Usar ${emoji}`} onClick={() => chooseEmoji(emoji)}>{emoji}</button>)}</div>
+      </div>
+    </div>}
+  </>
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -72,9 +141,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<AuthContextValue>(() => ({
     user: session?.user ?? null, profile, session, loading, configured: Boolean(supabase), refreshProfile,
-    updateProfile: async ({ fullName, phone }) => {
+    updateProfile: async ({ fullName, phone, avatarEmoji }) => {
       if (!supabase || !session?.user) return { error: new Error('Você precisa estar autenticado para editar o perfil.') }
-      const { error } = await supabase.from('profiles').update({ full_name: fullName.trim(), phone: phone.trim() || null }).eq('id', session.user.id)
+      const changes = {
+        ...(fullName !== undefined ? { full_name: fullName.trim() } : {}),
+        ...(phone !== undefined ? { phone: phone.trim() || null } : {}),
+        ...(avatarEmoji !== undefined ? { avatar_emoji: avatarEmoji } : {}),
+      }
+      const { error } = await supabase.from('profiles').update(changes).eq('id', session.user.id)
       if (!error) await refreshProfile()
       return { error: error ? toError(error) : null }
     },
@@ -101,7 +175,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     },
   }), [loading, profile, session])
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+  return <AuthContext.Provider value={value}><ProfileMenuOverlay />{children}</AuthContext.Provider>
 }
 
 export function useAuth() {
