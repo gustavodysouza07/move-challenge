@@ -26,6 +26,7 @@ alter table public.profiles add constraint profiles_avatar_emoji_check
 
 -- --------------------------------- 2. Envio da atividade agora leva passos
 drop function if exists public.submit_activity_session_with_proof(uuid, text);
+drop function if exists public.submit_activity_session_with_proof(uuid, text, integer);
 
 create function public.submit_activity_session_with_proof(
   p_session_id uuid,

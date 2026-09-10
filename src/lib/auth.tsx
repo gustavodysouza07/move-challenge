@@ -37,12 +37,30 @@ function toError(error: unknown) {
   return error instanceof Error ? error : new Error('Não foi possível concluir a operação.')
 }
 
-const profileEmojis = ['🏃', '🚴', '🏋️', '🔥', '⚡', '💪', '🦁', '🐯', '🐺', '🦊', '🐼', '🚀', '🌟', '💎', '🎯', '🏆']
+const emojiSuggestions = [
+  '🏃', '🚴', '🏋️', '🧘', '🏊', '⚽', '🥊', '🤸',
+  '🔥', '⚡', '💪', '🚀', '🌟', '💎', '🎯', '🏆',
+  '🦁', '🐯', '🐺', '🦊', '🐼', '🦄', '🐢', '🪩',
+]
+
+// Extrai o primeiro emoji digitado, respeitando emojis compostos
+// (bandeiras, tons de pele, ZWJ).
+function firstEmoji(value: string): string | null {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  const segmenter = typeof Intl !== 'undefined' && 'Segmenter' in Intl
+    ? new (Intl as unknown as { Segmenter: new (l: string, o: object) => { segment: (s: string) => Iterable<{ segment: string }> } }).Segmenter('pt-BR', { granularity: 'grapheme' })
+    : null
+  const first = segmenter ? [...segmenter.segment(trimmed)][0]?.segment : Array.from(trimmed)[0]
+  if (!first || first.length > 16) return null
+  return /\p{Extended_Pictographic}/u.test(first) ? first : null
+}
 
 function ProfileMenuOverlay() {
   const { profile, signOut, updateProfile } = useAuth()
   const [open, setOpen] = useState(false)
   const [emojiOpen, setEmojiOpen] = useState(false)
+  const [custom, setCustom] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -62,13 +80,19 @@ function ProfileMenuOverlay() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  const chooseEmoji = async (emoji: string) => {
+  const saveEmoji = async (emoji: string) => {
     setBusy(true)
     setError('')
     const result = await updateProfile({ avatarEmoji: emoji })
     setBusy(false)
     if (result.error) setError('Não foi possível atualizar seu emoji.')
-    else { setEmojiOpen(false); setOpen(false) }
+    else { setEmojiOpen(false); setOpen(false); setCustom('') }
+  }
+
+  const applyCustom = () => {
+    const emoji = firstEmoji(custom)
+    if (!emoji) { setError('Digite ou cole um emoji.'); return }
+    saveEmoji(emoji)
   }
 
   const logout = async () => {
@@ -81,17 +105,55 @@ function ProfileMenuOverlay() {
   }
 
   if (!profile) return null
+  const preview = firstEmoji(custom)
   return <>
     {open && <div className="profile-action-menu" role="menu" aria-label="Ações do perfil">
       <button role="menuitem" onClick={() => { setOpen(false); document.querySelector<HTMLInputElement>('.profile-edit-form input')?.focus() }}>Editar perfil</button>
-      <button role="menuitem" onClick={() => { setEmojiOpen(true); setError('') }}>Trocar emoji</button>
+      <button role="menuitem" onClick={() => { setEmojiOpen(true); setError(''); setCustom('') }}>Trocar emoji</button>
       <button role="menuitem" disabled={busy} onClick={logout}>Sair</button>
       {error && <span className="profile-menu-error" role="alert">{error}</span>}
     </div>}
+
     {emojiOpen && <div className="profile-emoji-modal" role="dialog" aria-modal="true" aria-label="Escolher emoji" onMouseDown={() => setEmojiOpen(false)}>
       <div className="profile-emoji-panel" onMouseDown={event => event.stopPropagation()}>
-        <div className="modal-head"><div><span className="eyebrow">SEU AVATAR</span><h2>Escolha seu emoji.</h2></div><button className="icon-button" aria-label="Fechar" onClick={() => setEmojiOpen(false)}>×</button></div>
-        <div className="emoji-grid">{profileEmojis.map(emoji => <button key={emoji} disabled={busy} aria-label={`Usar ${emoji}`} onClick={() => chooseEmoji(emoji)}>{emoji}</button>)}</div>
+        <div className="modal-head">
+          <div><span className="eyebrow">SEU AVATAR</span><h2>Escolha seu emoji.</h2></div>
+          <button className="icon-button" aria-label="Fechar" onClick={() => setEmojiOpen(false)}>×</button>
+        </div>
+
+        <div className="emoji-custom">
+          <span className="emoji-custom-preview" aria-hidden="true">{preview ?? profile.avatar_emoji ?? '🪩'}</span>
+          <label>
+            Qualquer emoji
+            <input
+              value={custom}
+              onChange={event => { setCustom(event.target.value); setError('') }}
+              onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); applyCustom() } }}
+              placeholder="Digite ou cole aqui"
+              aria-label="Digite ou cole um emoji"
+              autoComplete="off"
+            />
+          </label>
+          <button className="primary-button compact" disabled={busy || !preview} onClick={applyCustom}>
+            {busy ? 'Salvando...' : 'Usar'}
+          </button>
+        </div>
+        <p className="emoji-hint">No celular, abra o teclado de emojis. No computador, use <kbd>Win</kbd>+<kbd>.</kbd> ou <kbd>Ctrl</kbd>+<kbd>Cmd</kbd>+<kbd>Espaço</kbd>.</p>
+
+        <span className="eyebrow emoji-divider">SUGESTÕES</span>
+        <div className="emoji-grid">
+          {emojiSuggestions.map(emoji => (
+            <button
+              key={emoji}
+              disabled={busy}
+              aria-label={`Usar ${emoji}`}
+              className={profile.avatar_emoji === emoji ? 'is-current' : ''}
+              onClick={() => saveEmoji(emoji)}
+            >{emoji}</button>
+          ))}
+        </div>
+
+        {error && <span className="profile-menu-error" role="alert">{error}</span>}
       </div>
     </div>}
   </>

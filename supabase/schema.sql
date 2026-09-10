@@ -193,7 +193,7 @@ begin
   if current_season.id is null then raise exception 'no active season'; end if;
   if not exists (select 1 from public.season_participants where season_id = current_season.id and user_id = auth.uid() and status = 'active') then raise exception 'active participation required'; end if;
   insert into public.activity_sessions (user_id, season_id, activity_type, started_at, status, source)
-  values (auth.uid(), current_season.id, p_activity_type, clock_timestamp(), 'active', 'move_checkin')
+  values (auth.uid(), current_season.id, p_activity_type, now(), 'active', 'move_checkin')
   returning * into created_session;
   return created_session;
 exception when unique_violation then
