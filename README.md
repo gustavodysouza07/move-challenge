@@ -9,7 +9,7 @@ npm install
 npm run dev
 ```
 
-O projeto funciona com apresentação pública quando o Supabase não está configurado. Para ativar cadastro, login, recuperação de senha e áreas privadas, copie `.env.example` para `.env.local` e informe `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`. A chave usada no navegador deve ser apenas a anon/publishable key; nunca use `service_role` no frontend.
+O projeto funciona com apresentação pública quando o Supabase não está configurado. Para ativar cadastro, login, recuperação de senha e áreas privadas, copie `.env.example` para `.env.local` e informe `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY`. A chave usada no navegador deve ser apenas a publishable key; nunca use `service_role` no frontend.
 
 ## Arquitetura
 
