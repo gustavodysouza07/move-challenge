@@ -7,6 +7,8 @@ const auth = await readFile(new URL('../src/lib/auth.tsx', import.meta.url), 'ut
 const browserClient = await readFile(new URL('../src/lib/supabase.ts', import.meta.url), 'utf8')
 const schema = await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8')
 const migration = await readFile(new URL('../supabase/migrations/004_seed_initial_season_and_avatar.sql', import.meta.url), 'utf8')
+const activityMigration = await readFile(new URL('../supabase/migrations/005_allow_activity_during_registration_season.sql', import.meta.url), 'utf8')
+const validationMigration = await readFile(new URL('../supabase/migrations/006_ensure_activity_type_validation.sql', import.meta.url), 'utf8')
 
 test('authenticated and unauthenticated states are guarded by the auth context', () => {
   assert.match(source, /if \(loading\) return <LoadingScreen \/>/)
@@ -15,8 +17,13 @@ test('authenticated and unauthenticated states are guarded by the auth context',
 })
 
 test('activity registration is server-validated for active season and participation', () => {
+  assert.match(validationMigration, /create or replace function public\.validate_activity_type\(p_activity_type text\)/)
+  assert.match(validationMigration, /Caminhada leve.*Corrida/s)
+  assert.match(activityMigration, /public\.validate_activity_type\(p_activity_type\)/)
   assert.match(migration, /'registration'/)
-  assert.match(schema, /status = 'active' and current_date between start_date and end_date/)
+  assert.match(activityMigration, /status in \('registration', 'active'\)/)
+  assert.match(activityMigration, /current_date between start_date and end_date/)
+  assert.match(activityMigration, /status = 'active'/)
   assert.match(schema, /season_participants where season_id = current_season\.id and user_id = auth\.uid\(\) and status = 'active'/)
   assert.match(source, /no active season/)
   assert.match(source, /active participation required/)
@@ -30,11 +37,21 @@ test('participation follows registration, pending payment, and administrative ac
   assert.match(schema, /set status = 'active', approved_at = now\(\)/)
 })
 
+test('header uses the real season and the register action has no demo season', () => {
+  assert.doesNotMatch(source, /Temporada 03|Temporada 3/)
+  assert.match(source, /setCurrentSeason\(/)
+  assert.match(source, /season\.start_date <= today && season\.end_date >= today/)
+  assert.match(source, /season\.status === 'registration' && season\.start_date > today/)
+  assert.match(source, /season\.start_date > today/)
+})
+
 test('avatar update stays scoped to the authenticated profile', () => {
   assert.match(migration, /add column if not exists avatar_emoji text default/)
   assert.match(auth, /avatarEmoji !== undefined/)
   assert.match(auth, /\.eq\('id', session\.user\.id\)/)
   assert.match(schema, /participants edit allowed profile fields.*on public\.profiles for update/s)
+  assert.match(source, /avatar-button.*profile\?\.avatar_emoji/s)
+  assert.match(source, /profile-avatar.*profile\?\.avatar_emoji/s)
 })
 
 test('profile actions include menu, emoji choices, logout, and outside-click close', () => {

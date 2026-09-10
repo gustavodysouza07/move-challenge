@@ -62,13 +62,6 @@ function ProfileMenuOverlay() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  useEffect(() => {
-    const emoji = profile?.avatar_emoji || '🪩'
-    document.querySelectorAll<HTMLElement>('.profile-avatar, .avatar-button').forEach(element => {
-      if (element.firstChild) element.firstChild.nodeValue = emoji
-    })
-  }, [profile?.avatar_emoji])
-
   const chooseEmoji = async (emoji: string) => {
     setBusy(true)
     setError('')
