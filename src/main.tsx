@@ -37,7 +37,7 @@ const metValues: Record<ActivityType, number> = {
 
 const navItems: { id: Page; label: string; icon: typeof Home }[] = [
   { id: 'home', label: 'Home', icon: Home }, { id: 'ranking', label: 'Ranking', icon: Trophy },
-  { id: 'register', label: 'Registrar', icon: Plus }, { id: 'activities', label: 'Minhas atividades', icon: History }, { id: 'challenges', label: 'Desafios', icon: Swords },
+  { id: 'register', label: 'Registrar', icon: Plus }, { id: 'activities', label: 'Minhas atividades', icon: History }, { id: 'challenges', label: 'Duelos', icon: Swords },
   { id: 'profile', label: 'Perfil', icon: UserRound },
 ]
 
@@ -53,6 +53,7 @@ function App() {
   const [currentSeason, setCurrentSeason] = useState<CurrentSeason | null>(null)
 
   useEffect(() => {
+    if (supabase && user) supabase.rpc('resolve_finished_duels')
     if ('serviceWorker' in navigator && import.meta.env.PROD) {
       navigator.serviceWorker.register('/sw.js').catch(() => undefined)
     }
@@ -97,7 +98,7 @@ function App() {
     </header>
     {menuOpen && <div className="quick-menu"><button onClick={() => go('rules')}><BookOpen size={17} /> Como pontua</button>{profile?.role === 'admin' && <button onClick={() => go('admin')}><ShieldCheck size={17} /> Admin</button>}<button onClick={() => notify('Tudo certo: seus dados estão protegidos.')}><ShieldCheck size={17} /> Privacidade</button><button onClick={() => signOut()}><Lock size={17} /> Sair</button></div>}
 
-    <main className="content">{page === 'home' && <HomePage userId={user.id} onNavigate={go} onRegister={() => setShowRegister(true)} done={activityDone} />}{page === 'ranking' && <RankingPage userId={user.id} />}{page === 'register' && <RegisterPage onCancelled={() => { setActiveSession(null); setCompletedSession(null) }} activeSession={activeSession} completedSession={completedSession} onStarted={setActiveSession} onCompleted={session => { setActiveSession(null); setCompletedSession(session) }} onDone={(session) => { setCompletedSession(null); setActivityDone(true); notify(`Atividade de ${formatDuration(session.duration_seconds ?? 0)} enviada para validação.`); go('home') }} />}{page === 'activities' && <ActivityHistoryPage userId={user.id} />}{page === 'challenges' && <ChallengesPage onAction={notify} />}{page === 'profile' && <ProfilePage profile={profile} onNavigate={go} onAction={notify} />}{page === 'rules' && <RulesPage />}{page === 'enrollment' && <EnrollmentPage />}{page === 'admin' && (profile?.role === 'admin' ? <AdminWorkspace /> : <AccessState title="Área restrita" detail="Apenas administradores podem acessar este espaço." onAction={() => go('home')} action="Voltar" />)}</main>
+    <main className="content">{page === 'home' && <HomePage userId={user.id} onNavigate={go} onRegister={() => setShowRegister(true)} done={activityDone} />}{page === 'ranking' && <RankingPage userId={user.id} />}{page === 'register' && <RegisterPage onCancelled={() => { setActiveSession(null); setCompletedSession(null) }} activeSession={activeSession} completedSession={completedSession} onStarted={setActiveSession} onCompleted={session => { setActiveSession(null); setCompletedSession(session) }} onDone={(session) => { setCompletedSession(null); setActivityDone(true); notify(`Atividade de ${formatDuration(session.duration_seconds ?? 0)} enviada para validação.`); go('home') }} />}{page === 'activities' && <ActivityHistoryPage userId={user.id} />}{page === 'challenges' && <DuelsPage userId={user.id} onAction={notify} />}{page === 'profile' && <ProfilePage profile={profile} onNavigate={go} onAction={notify} />}{page === 'rules' && <RulesPage />}{page === 'enrollment' && <EnrollmentPage />}{page === 'admin' && (profile?.role === 'admin' ? <AdminWorkspace /> : <AccessState title="Área restrita" detail="Apenas administradores podem acessar este espaço." onAction={() => go('home')} action="Voltar" />)}</main>
 
     <nav className="bottom-nav">{navItems.map(({ id, label, icon: Icon }) => <button key={id} className={page === id ? 'active' : ''} onClick={() => id === 'register' ? setShowRegister(true) : go(id)}><span className="nav-icon"><Icon size={20} strokeWidth={page === id ? 2.5 : 1.8} />{id === 'register' && <span className="nav-plus">+</span>}</span><span>{label}</span></button>)}</nav>
     {(showRegister || activeSession || completedSession) && <RegisterModal onCancelled={() => { setActiveSession(null); setCompletedSession(null); setShowRegister(false) }} season={currentSeason} activeSession={activeSession} completedSession={completedSession} onClose={() => { setShowRegister(false); setCompletedSession(null) }} onStarted={setActiveSession} onCompleted={session => { setActiveSession(null); setCompletedSession(session) }} onDone={(session) => { setActiveSession(null); setCompletedSession(null); setActivityDone(true); setShowRegister(false); notify(`Atividade de ${formatDuration(session.duration_seconds ?? 0)} enviada para validação.`) }} />}
@@ -163,7 +164,7 @@ function AdminWorkspace() {
   const { user } = useAuth()
   const [tab, setTab] = useState<'dashboard' | 'seasons' | 'participants' | 'payments' | 'activities' | 'ranking' | 'settings'>('dashboard')
   const tabs = [['dashboard', 'Dashboard'], ['seasons', 'Temporadas'], ['participants', 'Participantes'], ['payments', 'Pagamentos PIX'], ['activities', 'Atividades pendentes'], ['ranking', 'Ranking'], ['settings', 'Configurações']] as const
-  return <><nav className="admin-tabs">{tabs.map(([id, label]) => <button className={tab === id ? 'active' : ''} key={id} onClick={() => setTab(id)}>{label}</button>)}</nav>{tab === 'dashboard' && <AdminPage />}{tab === 'seasons' && <AdminSeasons />}{tab === 'participants' && <AdminParticipants />}{tab === 'payments' && <AdminPayments />}{tab === 'activities' && <AdminActivities />}{tab === 'ranking' && user && <RankingPage userId={user.id} />}{tab === 'settings' && <><PageTitle eyebrow="CONFIGURAÇÕES" title="Configurações" detail="Acesso administrativo protegido pelo Supabase." /><div className="form-panel"><p>As alterações de competição são feitas por RPCs administrativas e registradas em auditoria.</p></div></>}</>
+  return <><nav className="admin-tabs">{tabs.map(([id, label]) => <button className={tab === id ? 'active' : ''} key={id} onClick={() => setTab(id)}>{label}</button>)}</nav>{tab === 'dashboard' && <AdminPage />}{tab === 'seasons' && <AdminSeasons />}{tab === 'participants' && <AdminParticipants />}{tab === 'payments' && <AdminPayments />}{tab === 'activities' && <AdminActivities />}{tab === 'ranking' && user && <RankingPage userId={user.id} />}{tab === 'settings' && <AdminSettings />}</>
 }
 
 function AdminSeasons() {
@@ -331,8 +332,262 @@ function ActivitySessionForm({ season, activeSession, completedSession, onStarte
   return <div className={`form-panel activity-session-panel ${activeSession ? 'is-active' : ''}`}>{activeSession ? <><div className="session-heading"><span className="live-dot" /><span className="eyebrow">{paused ? '⏸ ATIVIDADE PAUSADA' : '🔥 ATIVIDADE EM ANDAMENTO'}</span></div><h2>{activeSession.activity_type}</h2><div className="session-clock">{formatDuration(elapsed)}</div><p className="session-caption">{paused ? 'tempo pausado não entra na duração efetiva' : 'tempo realizado · registrado pelo servidor'}</p>{reachedGoal && <div className="goal-hit"><Flame size={17} /> META BATIDA! Você pode continuar.</div>}<div className="session-goal"><div><span className="eyebrow">META DO DIA</span><strong>{Math.min(100, Math.round((elapsed / 1800) * 100))}%</strong></div><div className="progress-line"><span style={{ width: `${Math.min(100, (elapsed / 1800) * 100)}%` }} /></div><small>{formatDuration(Math.min(elapsed, 1800))} de 00:30:00</small></div><div className="review-actions"><button className="text-button" disabled={busy} onClick={togglePause}>{paused ? 'Continuar' : 'Pausar'}</button><button className="primary-button finish-button" disabled={busy} onClick={finish}>{busy ? 'Finalizando...' : 'Finalizar'} <Check size={17} /></button></div><button className="text-button discard-button" disabled={busy} onClick={cancel}>Descartar atividade</button></> : <><label>Atividade<select value={type} onChange={e => setType(e.target.value as ActivityType)}>{Object.keys(metValues).map(item => <option key={item}>{item}</option>)}</select></label><div className="estimate"><span className="estimate-icon"><Play size={21} /></span><div><span className="eyebrow">CHECK-IN COM HORÁRIO REAL</span><strong>Pronto para começar</strong><p>O servidor registra o início e calcula a duração no final.</p></div></div><button className="primary-button full" disabled={busy} onClick={start}>{busy ? 'Iniciando...' : 'Iniciar atividade'} <Play size={17} /></button></>} {error && <p className="form-error session-error">{error}</p>}<p className="form-note"><Lock size={13} /> A pontuação só é criada após validação.</p></div>
 }
 
-function ChallengesPage({ onAction }: { onAction: (message: string) => void }) { const [challenges, setChallenges] = useState<Array<{ id: string; name: string; description: string | null; objective: number; points: number; progress: number; status: string }>>([]); const [loading, setLoading] = useState(true); useEffect(() => { if (!supabase) { setLoading(false); return }; const load = async () => { const { data } = await supabase.from('challenges').select('id, name, description, objective, points, challenge_progress(progress, status)').eq('is_active', true).order('starts_at'); const mapped = (data ?? []).map(item => { const row = item as unknown as { id: string; name: string; description: string | null; objective: number; points: number; challenge_progress: Array<{ progress: number; status: string }> }; const progress = row.challenge_progress?.[0]; return { id: row.id, name: row.name, description: row.description, objective: Number(row.objective), points: Number(row.points), progress: Number(progress?.progress ?? 0), status: progress?.status ?? 'joined' } }); setChallenges(mapped); setLoading(false) }; load() }, []); const join = async (id: string) => { if (!supabase) return; const { error } = await supabase.rpc('join_challenge', { p_challenge_id: id }); if (error) onAction(error.message); else onAction('Desafio iniciado.'); }; return <><PageTitle eyebrow="PLAYGROUND" title="Escolha seu próximo jogo." detail="Desafios e progresso oficiais da temporada." />{loading ? <div className="form-panel"><p>Carregando desafios...</p></div> : challenges.length === 0 ? <div className="score-info"><CircleHelp size={18} /><div><strong>Nenhum desafio ativo</strong><p>Os próximos desafios aparecerão aqui quando forem configurados pela organização.</p></div></div> : <div className="challenge-list">{challenges.map((challenge, index) => <ChallengeCard key={challenge.id} icon={index % 2 ? <Zap /> : <Swords />} label={`${challenge.points} PONTOS`} title={challenge.name} copy={challenge.description ?? 'Desafio oficial da temporada.'} progress={Math.min(100, Math.round((challenge.progress / challenge.objective) * 100))} action={challenge.status === 'joined' ? 'Participar' : challenge.status === 'completed' ? 'Concluído' : 'Continuar'} tone={index % 2 ? 'yellow' : 'purple'} onClick={() => challenge.status === 'joined' && join(challenge.id)} />)}</div>}</> }
-function ChallengeCard({ icon, label, title, copy, progress, action, tone, onClick }: { icon: React.ReactNode; label: string; title: string; copy: string; progress: number; action: string; tone: string; onClick: () => void }) { return <div className={`challenge-card ${tone}`}><div className="challenge-card-top"><span className="large-challenge-icon">{icon}</span><span className="eyebrow">{label}</span><span className="card-kicker">+30 <small>pts</small></span></div><h2>{title}</h2><p>{copy}</p><div className="challenge-progress"><div className="progress-line"><span style={{ width: `${progress}%` }} /></div><span>{progress}% completo</span></div><button className="text-button" onClick={onClick}>{action} <ArrowUpRight size={16} /></button></div> }
+type DuelRow = {
+  id: string; season_id: string; week_number: number; challenger_id: string; opponent_id: string
+  status: 'pending' | 'accepted' | 'declined' | 'expired' | 'finished'
+  proposed_at: string; expires_at: string; winner_id: string | null
+  challenger_days: number | null; opponent_days: number | null; points_awarded: number
+  challenger?: { full_name: string; avatar_emoji: string | null } | null
+  opponent?: { full_name: string; avatar_emoji: string | null } | null
+}
+type DuelSuggestion = { user_id: string; full_name: string; avatar_emoji: string | null; last_week_points: number }
+
+const duelStatusLabel: Record<DuelRow['status'], string> = {
+  pending: 'aguardando resposta', accepted: 'em disputa', declined: 'recusado',
+  expired: 'expirado', finished: 'encerrado',
+}
+
+function DuelsPage({ userId, onAction }: { userId: string; onAction: (message: string) => void }) {
+  const [duels, setDuels] = useState<DuelRow[]>([])
+  const [suggestions, setSuggestions] = useState<DuelSuggestion[]>([])
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  const load = async () => {
+    if (!supabase) { setLoading(false); return }
+    await supabase.rpc('resolve_finished_duels')
+    const [duelResult, suggestionResult] = await Promise.all([
+      supabase.from('duels').select('id, season_id, week_number, challenger_id, opponent_id, status, proposed_at, expires_at, winner_id, challenger_days, opponent_days, points_awarded, challenger:profiles!duels_challenger_id_fkey(full_name, avatar_emoji), opponent:profiles!duels_opponent_id_fkey(full_name, avatar_emoji)').order('proposed_at', { ascending: false }).limit(30),
+      supabase.rpc('suggest_duel_opponents', { p_limit: 5 }),
+    ])
+    setDuels((duelResult.data ?? []) as unknown as DuelRow[])
+    setSuggestions((suggestionResult.data ?? []) as DuelSuggestion[])
+    setLoading(false)
+  }
+  useEffect(() => { load() }, [userId])
+
+  const propose = async (opponentId: string, name: string) => {
+    if (!supabase) return
+    if (!window.confirm(`Desafiar ${name} nesta semana?`)) return
+    setBusy(true); setError('')
+    const { error: rpcError } = await supabase.rpc('propose_duel', { p_opponent_id: opponentId })
+    setBusy(false)
+    if (rpcError) setError(rpcError.message)
+    else { onAction(`Duelo proposto para ${name}.`); load() }
+  }
+
+  const respond = async (duelId: string, accept: boolean) => {
+    if (!supabase) return
+    setBusy(true); setError('')
+    const { error: rpcError } = await supabase.rpc('respond_duel', { p_duel_id: duelId, p_accept: accept })
+    setBusy(false)
+    if (rpcError) setError(rpcError.message)
+    else { onAction(accept ? 'Duelo aceito. Boa semana!' : 'Duelo recusado.'); load() }
+  }
+
+  const invitations = duels.filter(d => d.status === 'pending' && d.opponent_id === userId)
+  const ongoing = duels.filter(d => d.status === 'accepted' || (d.status === 'pending' && d.challenger_id === userId))
+  const history = duels.filter(d => ['finished', 'declined', 'expired'].includes(d.status))
+
+  const describe = (duel: DuelRow) => {
+    const isChallenger = duel.challenger_id === userId
+    const other = isChallenger ? duel.opponent : duel.challenger
+    return { name: other?.full_name ?? 'Participante', emoji: other?.avatar_emoji || '🪩', isChallenger }
+  }
+
+  return <>
+    <PageTitle eyebrow="DUELOS" title="Desafie alguém." detail="Uma semana, um adversário. Vence quem tiver mais dias concluídos." />
+    {error && <div className="form-error">{error}</div>}
+
+    {invitations.length > 0 && <section className="admin-review">
+      <SectionHeading title="Convites para você" />
+      <div className="admin-review-list">{invitations.map(duel => {
+        const info = describe(duel)
+        return <div className="admin-review-row" key={duel.id}>
+          <div>
+            <strong>{info.emoji} {info.name} desafiou você</strong>
+            <span>Semana {duel.week_number} · responda até {new Date(duel.expires_at).toLocaleString('pt-BR')}</span>
+          </div>
+          <div className="review-actions">
+            <button className="text-button" disabled={busy} onClick={() => respond(duel.id, true)}>Aceitar</button>
+            <button className="text-button reject" disabled={busy} onClick={() => respond(duel.id, false)}>Recusar</button>
+          </div>
+        </div>
+      })}</div>
+    </section>}
+
+    <section className="admin-review">
+      <SectionHeading title="Em andamento" />
+      <div className="admin-review-list">{loading ? <p className="admin-empty">Carregando duelos...</p>
+        : ongoing.length === 0 ? <p className="admin-empty">Nenhum duelo ativo nesta semana.</p>
+        : ongoing.map(duel => {
+            const info = describe(duel)
+            return <div className="admin-review-row" key={duel.id}>
+              <div>
+                <strong>{info.emoji} {info.name}</strong>
+                <span>Semana {duel.week_number} · {duelStatusLabel[duel.status]}</span>
+                <small>{info.isChallenger ? 'você propôs' : 'você aceitou'}</small>
+              </div>
+              <span className={`status-pill status-${duel.status}`}>{duelStatusLabel[duel.status]}</span>
+            </div>
+          })}</div>
+    </section>
+
+    <section className="admin-review">
+      <SectionHeading title="Quem você pode desafiar" />
+      <div className="admin-review-list">{loading ? <p className="admin-empty">Buscando adversários...</p>
+        : suggestions.length === 0 ? <p className="admin-empty">Nenhum adversário disponível nesta semana. Duelos só podem ser propostos nos quatro primeiros dias.</p>
+        : suggestions.map(person => <div className="admin-review-row" key={person.user_id}>
+            <div>
+              <strong>{person.avatar_emoji || '🪩'} {person.full_name}</strong>
+              <span>{person.last_week_points} pts na semana passada</span>
+            </div>
+            <div className="review-actions">
+              <button className="text-button" disabled={busy} onClick={() => propose(person.user_id, person.full_name)}>Desafiar</button>
+            </div>
+          </div>)}</div>
+    </section>
+
+    {history.length > 0 && <section className="admin-review">
+      <SectionHeading title="Histórico" />
+      <div className="admin-review-list">{history.map(duel => {
+        const info = describe(duel)
+        const mine = duel.challenger_id === userId ? duel.challenger_days : duel.opponent_days
+        const theirs = duel.challenger_id === userId ? duel.opponent_days : duel.challenger_days
+        const outcome = duel.status !== 'finished' ? duelStatusLabel[duel.status]
+          : duel.winner_id === null ? 'empate'
+          : duel.winner_id === userId ? `vitória · +${duel.points_awarded} pts` : 'derrota'
+        return <div className="admin-review-row" key={duel.id}>
+          <div>
+            <strong>{info.emoji} {info.name}</strong>
+            <span>Semana {duel.week_number}{duel.status === 'finished' ? ` · ${mine ?? 0} x ${theirs ?? 0} dias` : ''}</span>
+          </div>
+          <span className={`status-pill status-${duel.status}`}>{outcome}</span>
+        </div>
+      })}</div>
+    </section>}
+
+    <div className="score-info"><CircleHelp size={18} /><div><strong>Como o duelo é decidido</strong><p>Vence quem concluir mais dias na semana. Empate desempata por consistência e depois por volume. Os pontos do duelo somam por fora do teto semanal, e você pode duelar no máximo duas vezes com a mesma pessoa na temporada.</p></div></div>
+  </>
+}
+
+type SeasonOption = { id: string; name: string; status: string; rules: Record<string, number> | null }
+const ruleLabels: Array<[string, string]> = [
+  ['daily_minutes', 'Minutos por dia'], ['daily_steps', 'Passos por dia'],
+  ['consistency_per_day', 'Pontos por dia'], ['weekly_consistency_cap', 'Teto de consistência'],
+  ['bonus_days', 'Dias para bônus'], ['bonus_points', 'Pontos de bônus'],
+  ['evolution_cap', 'Teto de evolução'], ['volume_cap', 'Teto de volume'],
+  ['met_min_per_point', 'MET-min por ponto'], ['duel_points', 'Pontos por duelo'],
+]
+
+function AdminSettings() {
+  const [seasons, setSeasons] = useState<SeasonOption[]>([])
+  const [seasonId, setSeasonId] = useState('')
+  const [rules, setRules] = useState<Record<string, string>>({})
+  const [prizes, setPrizes] = useState({ champion: '40', second: '20', third: '10', evolution: '15', consistency: '15', minConsistency: '80' })
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+
+  const load = async () => {
+    if (!supabase) return
+    const { data } = await supabase.from('seasons').select('id, name, status, rules').order('start_date', { ascending: false })
+    const list = (data ?? []) as SeasonOption[]
+    setSeasons(list)
+    if (list.length && !seasonId) setSeasonId(list[0].id)
+  }
+  useEffect(() => { load() }, [])
+
+  useEffect(() => {
+    if (!supabase || !seasonId) return
+    const season = seasons.find(item => item.id === seasonId)
+    const current = season?.rules ?? {}
+    setRules(Object.fromEntries(ruleLabels.map(([key]) => [key, String(current[key] ?? '')])))
+    supabase.from('season_prizes').select('*').eq('season_id', seasonId).maybeSingle().then(({ data }) => {
+      if (!data) return
+      setPrizes({
+        champion: String(data.champion_percent), second: String(data.second_percent),
+        third: String(data.third_percent), evolution: String(data.evolution_percent),
+        consistency: String(data.consistency_percent), minConsistency: String(data.min_consistency_percent),
+      })
+    })
+  }, [seasonId, seasons])
+
+  const selected = seasons.find(item => item.id === seasonId)
+  const isDraft = selected?.status === 'draft'
+  const prizeTotal = ['champion', 'second', 'third', 'evolution', 'consistency']
+    .reduce((sum, key) => sum + (Number(prizes[key as keyof typeof prizes]) || 0), 0)
+
+  const saveRules = async () => {
+    if (!supabase || !seasonId) return
+    setBusy(true); setError(''); setMessage('')
+    const payload = Object.fromEntries(Object.entries(rules).filter(([, value]) => String(value).trim() !== '').map(([key, value]) => [key, Number(value)]))
+    const { error: rpcError } = await supabase.rpc('admin_set_season_rules', { p_season_id: seasonId, p_rules: payload })
+    setBusy(false)
+    if (rpcError) setError(rpcError.message)
+    else { setMessage('Parâmetros salvos.'); load() }
+  }
+
+  const savePrizes = async () => {
+    if (!supabase || !seasonId) return
+    setBusy(true); setError(''); setMessage('')
+    const { error: rpcError } = await supabase.rpc('admin_upsert_season_prizes', {
+      p_season_id: seasonId, p_champion: Number(prizes.champion), p_second: Number(prizes.second),
+      p_third: Number(prizes.third), p_evolution: Number(prizes.evolution),
+      p_consistency: Number(prizes.consistency), p_min_consistency: Number(prizes.minConsistency),
+    })
+    setBusy(false)
+    if (rpcError) setError(rpcError.message)
+    else setMessage('Prêmios salvos.')
+  }
+
+  return <>
+    <PageTitle eyebrow="CONFIGURAÇÕES" title="Regras e prêmios." detail="Alterações passam por RPC administrativa e ficam registradas em auditoria." />
+    {message && <div className="form-success">{message}</div>}
+    {error && <div className="form-error">{error}</div>}
+
+    <div className="form-panel">
+      <label>Temporada<select value={seasonId} onChange={event => setSeasonId(event.target.value)}>
+        {seasons.map(season => <option key={season.id} value={season.id}>{season.name} · {season.status}</option>)}
+      </select></label>
+    </div>
+
+    <section className="admin-review">
+      <SectionHeading title="Prêmios da temporada" />
+      <div className="form-panel">
+        <div className="form-row">
+          <label>Campeão (%)<input type="number" min={0} max={100} value={prizes.champion} onChange={e => setPrizes({ ...prizes, champion: e.target.value })} /></label>
+          <label>Segundo (%)<input type="number" min={0} max={100} value={prizes.second} onChange={e => setPrizes({ ...prizes, second: e.target.value })} /></label>
+        </div>
+        <div className="form-row">
+          <label>Terceiro (%)<input type="number" min={0} max={100} value={prizes.third} onChange={e => setPrizes({ ...prizes, third: e.target.value })} /></label>
+          <label>Maior evolução (%)<input type="number" min={0} max={100} value={prizes.evolution} onChange={e => setPrizes({ ...prizes, evolution: e.target.value })} /></label>
+        </div>
+        <div className="form-row">
+          <label>Rateio consistência (%)<input type="number" min={0} max={100} value={prizes.consistency} onChange={e => setPrizes({ ...prizes, consistency: e.target.value })} /></label>
+          <label>Consistência mínima (%)<input type="number" min={0} max={100} value={prizes.minConsistency} onChange={e => setPrizes({ ...prizes, minConsistency: e.target.value })} /></label>
+        </div>
+        <p className="submit-hint">Soma atual: {prizeTotal}% do valor arrecadado. O restante fica com a organização.</p>
+        <button className="primary-button" disabled={busy || prizeTotal > 100} onClick={savePrizes}>{busy ? 'Salvando...' : 'Salvar prêmios'} <Check size={16} /></button>
+      </div>
+    </section>
+
+    <section className="admin-review">
+      <SectionHeading title="Parâmetros de pontuação" />
+      <div className="form-panel">
+        {!isDraft && <p className="submit-hint">Esta temporada não é mais rascunho, então os parâmetros estão travados. Isso impede que o ranking de quem já competiu seja recalculado.</p>}
+        <div className="form-row">{ruleLabels.map(([key, label]) => (
+          <label key={key}>{label}<input type="number" min={0} disabled={!isDraft} value={rules[key] ?? ''} onChange={e => setRules({ ...rules, [key]: e.target.value })} /></label>
+        ))}</div>
+        <button className="primary-button" disabled={busy || !isDraft} onClick={saveRules}>{busy ? 'Salvando...' : 'Salvar parâmetros'} <Check size={16} /></button>
+      </div>
+    </section>
+
+    <div className="score-info"><CircleHelp size={18} /><div><strong>O que não é editável</strong><p>O teto de 120 pontos por semana e o limite de 6 dias pontuáveis estão gravados na estrutura do banco e valem para todas as temporadas.</p></div></div>
+  </>
+}
+
 function Badge({ icon, title, unlocked = false }: { icon: string; title: string; unlocked?: boolean }) { return <div className={`badge ${unlocked ? 'unlocked' : ''}`}><span>{unlocked ? icon : '◌'}</span><strong>{title}</strong>{unlocked && <small>conquistado</small>}</div> }
 
 function ProfilePage({ profile, onNavigate, onAction }: { profile: Profile | null; onNavigate: (page: Page) => void; onAction: (message: string) => void }) { const { updateProfile } = useAuth(); const [name, setName] = useState(profile?.full_name ?? ''); const [phone, setPhone] = useState(profile?.phone ?? ''); const [busy, setBusy] = useState(false); const [message, setMessage] = useState(''); const [error, setError] = useState(''); useEffect(() => { setName(profile?.full_name ?? ''); setPhone(profile?.phone ?? '') }, [profile]); const save = async (event: React.FormEvent) => { event.preventDefault(); setBusy(true); setError(''); setMessage(''); const result = await updateProfile({ fullName: name, phone }); setBusy(false); if (result.error) setError(result.error.message); else setMessage('Perfil atualizado.') }; return <><section className="profile-head"><div className="profile-avatar">{profile?.avatar_emoji || '🪩'}<span className="status-check"><Check size={11} /></span></div><div><span className="eyebrow">SEU PERFIL</span><h1>{profile?.full_name ?? 'Seu perfil'}</h1><p>{profile?.email ?? 'Conta autenticada'} · participante {profile?.status === 'pending' ? 'pendente' : 'ativo'}</p></div><button className="icon-button" aria-label="Editar perfil"><MoreHorizontal size={20} /></button></section><form className="form-panel profile-edit-form" onSubmit={save}><label>Nome completo<input required minLength={2} maxLength={120} value={name} onChange={event => setName(event.target.value)} /></label><label>Celular<input value={phone} onChange={event => setPhone(event.target.value)} autoComplete="tel" /></label><p className="form-note"><Lock size={13} /> E-mail, status e permissão são controlados pelo sistema.</p><button className="primary-button" disabled={busy}>{busy ? 'Salvando...' : 'Salvar perfil'} <Check size={16} /></button>{message && <div className="form-success">{message}</div>}{error && <div className="form-error">{error}</div>}</form><div className="profile-stats"><div><strong>Dados oficiais</strong><span>pontuação no ranking</span></div><div><strong>Privado</strong><span>sem dados corporais</span></div><div><strong>Seguro</strong><span>RLS ativo</span></div></div><SectionHeading title="Seus badges" action="Ver todos" onClick={() => onNavigate('challenges')} /><div className="badge-grid profile-badges"><Badge icon="🔥" title="Primeiro streak" unlocked /><Badge icon="🚀" title="Virada de jogo" unlocked /><Badge icon="🧭" title="Explorador" unlocked /></div><div className="settings-list"><button onClick={() => onAction('Notificações atualizadas.')}><Bell size={18} /><span>Notificações</span><small>Ativas</small><ChevronRight size={17} /></button><button onClick={() => onNavigate('rules')}><ShieldCheck size={18} /><span>Privacidade e LGPD</span><ChevronRight size={17} /></button></div></> }
