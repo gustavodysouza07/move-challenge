@@ -66,3 +66,9 @@ input,select,textarea{font-size:16px}
   .admin-tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
   .admin-tabs::-webkit-scrollbar{display:none}
 }
+.wildcard-count{display:flex;align-items:center;gap:9px;margin-bottom:14px}
+.wildcard-count i{font-style:normal;font-size:22px;filter:grayscale(1);opacity:.35}
+.wildcard-count i.available{filter:none;opacity:1}
+.wildcard-count span{font-size:11px;color:var(--muted);margin-left:5px}
+.wildcard-history{margin-top:18px;padding-top:14px;border-top:1px solid #29253d}
+.wildcard-history .eyebrow{display:block;margin-bottom:8px}

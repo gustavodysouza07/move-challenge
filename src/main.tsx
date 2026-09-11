@@ -24,7 +24,7 @@ import { AuthProvider, useAuth, type Profile } from './lib/auth'
 import { supabase } from './lib/supabase'
 import './styles.css'
 
-type Page = 'home' | 'ranking' | 'register' | 'activities' | 'challenges' | 'groups' | 'profile' | 'rules' | 'admin' | 'enrollment'
+type Page = 'home' | 'ranking' | 'register' | 'activities' | 'challenges' | 'groups' | 'profile' | 'rules' | 'privacy' | 'admin' | 'enrollment'
 type ActivityType = 'Caminhada leve' | 'Caminhada rápida / inclinação' | 'Musculação moderada' | 'Musculação pesada' | 'Bike / spinning' | 'Natação' | 'Corrida' | 'Funcional / HIIT' | 'Yoga / alongamento'
 type ActivitySession = { id: string; activity_type: ActivityType; started_at: string; ended_at: string | null; status: 'active' | 'pending_validation' | 'validated' | 'rejected' | 'completed' | 'cancelled'; duration_seconds: number | null; paused_seconds?: number }
 type CurrentSeason = { id: string; name: string; start_date: string; end_date: string; status: 'registration' | 'active' }
@@ -96,9 +96,9 @@ function App() {
       <button className="season-pill" onClick={() => go('enrollment')}><span className="live-dot" /> {currentSeason?.name ?? 'Nenhuma temporada disponível'} <ChevronRight size={13} /></button>
       <div className="top-actions"><button className="icon-button" onClick={() => notify('Você está em dia!')} aria-label="Notificações"><Bell size={19} /><span className="notification-dot" /></button><button className="avatar-button" onClick={() => go('profile')}>{profile?.avatar_emoji || '🪩'}</button><button className="icon-button menu-button" onClick={() => setMenuOpen(!menuOpen)} aria-label="Abrir menu"><Menu size={20} /></button></div>
     </header>
-    {menuOpen && <div className="quick-menu"><button onClick={() => go('rules')}><BookOpen size={17} /> Como pontua</button><button onClick={() => go('groups')}><Users size={17} /> Meus grupos</button>{profile?.role === 'admin' && <button onClick={() => go('admin')}><ShieldCheck size={17} /> Admin</button>}<button onClick={() => notify('Tudo certo: seus dados estão protegidos.')}><ShieldCheck size={17} /> Privacidade</button><button onClick={() => signOut()}><Lock size={17} /> Sair</button></div>}
+    {menuOpen && <div className="quick-menu"><button onClick={() => go('rules')}><BookOpen size={17} /> Como pontua</button><button onClick={() => go('groups')}><Users size={17} /> Meus grupos</button><button onClick={() => go('privacy')}><ShieldCheck size={17} /> Privacidade</button>{profile?.role === 'admin' && <button onClick={() => go('admin')}><ShieldCheck size={17} /> Admin</button>}<button onClick={() => notify('Tudo certo: seus dados estão protegidos.')}><ShieldCheck size={17} /> Privacidade</button><button onClick={() => signOut()}><Lock size={17} /> Sair</button></div>}
 
-    <main className="content">{page === 'home' && <HomePage userId={user.id} onNavigate={go} onRegister={() => setShowRegister(true)} done={activityDone} />}{page === 'ranking' && <RankingPage userId={user.id} />}{page === 'register' && <RegisterPage onCancelled={() => { setActiveSession(null); setCompletedSession(null) }} activeSession={activeSession} completedSession={completedSession} onStarted={setActiveSession} onCompleted={session => { setActiveSession(null); setCompletedSession(session) }} onDone={(session) => { setCompletedSession(null); setActivityDone(true); notify(`Atividade de ${formatDuration(session.duration_seconds ?? 0)} enviada para validação.`); go('home') }} />}{page === 'activities' && <ActivityHistoryPage userId={user.id} />}{page === 'challenges' && <DuelsPage userId={user.id} onAction={notify} />}{page === 'groups' && <GroupsPage userId={user.id} onAction={notify} />}{page === 'profile' && <ProfilePage profile={profile} onNavigate={go} onAction={notify} />}{page === 'rules' && <RulesPage />}{page === 'enrollment' && <EnrollmentPage />}{page === 'admin' && (profile?.role === 'admin' ? <AdminWorkspace /> : <AccessState title="Área restrita" detail="Apenas administradores podem acessar este espaço." onAction={() => go('home')} action="Voltar" />)}</main>
+    <main className="content">{page === 'home' && <HomePage userId={user.id} onNavigate={go} onRegister={() => setShowRegister(true)} done={activityDone} />}{page === 'ranking' && <RankingPage userId={user.id} />}{page === 'register' && <RegisterPage onCancelled={() => { setActiveSession(null); setCompletedSession(null) }} activeSession={activeSession} completedSession={completedSession} onStarted={setActiveSession} onCompleted={session => { setActiveSession(null); setCompletedSession(session) }} onDone={(session) => { setCompletedSession(null); setActivityDone(true); notify(`Atividade de ${formatDuration(session.duration_seconds ?? 0)} enviada para validação.`); go('home') }} />}{page === 'activities' && <ActivityHistoryPage userId={user.id} />}{page === 'challenges' && <DuelsPage userId={user.id} onAction={notify} />}{page === 'groups' && <GroupsPage userId={user.id} onAction={notify} />}{page === 'profile' && <ProfilePage profile={profile} onNavigate={go} onAction={notify} />}{page === 'rules' && <RulesPage />}{page === 'privacy' && <PrivacyPage />}{page === 'enrollment' && <EnrollmentPage />}{page === 'admin' && (profile?.role === 'admin' ? <AdminWorkspace /> : <AccessState title="Área restrita" detail="Apenas administradores podem acessar este espaço." onAction={() => go('home')} action="Voltar" />)}</main>
 
     <nav className="bottom-nav">{navItems.map(({ id, label, icon: Icon }) => <button key={id} className={page === id ? 'active' : ''} onClick={() => id === 'register' ? setShowRegister(true) : go(id)}><span className="nav-icon"><Icon size={20} strokeWidth={page === id ? 2.5 : 1.8} />{id === 'register' && <span className="nav-plus">+</span>}</span><span>{label}</span></button>)}</nav>
     {(showRegister || activeSession || completedSession) && <RegisterModal onCancelled={() => { setActiveSession(null); setCompletedSession(null); setShowRegister(false) }} season={currentSeason} activeSession={activeSession} completedSession={completedSession} onClose={() => { setShowRegister(false); setCompletedSession(null) }} onStarted={setActiveSession} onCompleted={session => { setActiveSession(null); setCompletedSession(session) }} onDone={(session) => { setActiveSession(null); setCompletedSession(null); setActivityDone(true); setShowRegister(false); notify(`Atividade de ${formatDuration(session.duration_seconds ?? 0)} enviada para validação.`) }} />}
@@ -122,6 +122,15 @@ function EnrollmentPage() {
   const [declared, setDeclared] = useState<{ average_active_minutes: number; average_steps: number } | null>(null)
   const [proofFile, setProofFile] = useState<File | null>(null)
   useEffect(() => { if (!supabase || !user) { setBusy(false); return }; const load = async () => { const { data: seasonData } = await supabase.from('seasons').select('id, name, description, entry_fee, pix_key, start_date, end_date').eq('status', 'registration').order('start_date', { ascending: true }).limit(1).maybeSingle(); setSeason(seasonData); if (seasonData) { const { data: paymentData } = await supabase.from('payments').select('id, amount, payment_status, proof_url').eq('user_id', user.id).eq('season_id', seasonData.id).maybeSingle(); setPayment(paymentData); const { data: baselineData } = await supabase.from('baseline_metrics').select('average_active_minutes, average_steps').eq('user_id', user.id).eq('season_id', seasonData.id).maybeSingle(); setDeclared(baselineData) }; setBusy(false) }; load() }, [user])
+  const fillMissing = async () => {
+    if (!supabase) return
+    if (baseMinutes.trim() === '' || baseSteps.trim() === '') { setError('Preencha seus minutos e passos por dia.'); return }
+    setBusy(true); setError('')
+    const { data, error: rpcError } = await supabase.rpc('set_missing_baseline', { p_average_active_minutes: Number(baseMinutes), p_average_steps: Number(baseSteps) })
+    setBusy(false)
+    if (rpcError) setError(rpcError.message)
+    else { setDeclared(data as { average_active_minutes: number; average_steps: number }); setMessage('Ponto de partida registrado.') }
+  }
   const request = async () => {
     if (!supabase || !season) return
     if (baseMinutes.trim() === '' || baseSteps.trim() === '') { setError('Preencha seus minutos e passos por dia antes de se inscrever.'); return }
@@ -131,7 +140,7 @@ function EnrollmentPage() {
   const copyPixKey = async () => { if (!season.pix_key) return; try { await navigator.clipboard.writeText(season.pix_key); setMessage('Chave PIX copiada.') } catch { setError('Não foi possível copiar a chave PIX.') } }
   const uploadProof = async () => { const file = proofFile; if (!supabase || !payment || !user || !file) { setError('Escolha o arquivo do comprovante antes de enviar.'); return } setError(''); const allowed = ['image/jpeg', 'image/png', 'application/pdf']; if (!allowed.includes(file.type) || file.size > 5 * 1024 * 1024) { setError('Envie somente JPG, JPEG, PNG ou PDF de até 5 MB.'); return }; setBusy(true); const path = `${user.id}/${payment.id}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '-')}`; const upload = await supabase.storage.from('payment-proofs').upload(path, file, { upsert: false, contentType: file.type }); if (upload.error) { setBusy(false); setError(upload.error.message); return }; const { data, error: submitError } = await supabase.rpc('submit_payment_proof', { p_payment_id: payment.id, p_storage_path: path }); setBusy(false); if (submitError) setError(submitError.message); else { setProofFile(null); setPayment(data); setMessage('Comprovante enviado. A confirmação depende da revisão administrativa.') } }
   const statusLabel = payment?.payment_status === 'submitted' ? 'aguardando confirmação' : payment?.payment_status === 'confirmed' ? 'aprovado' : payment?.payment_status === 'rejected' ? 'rejeitado' : 'pagamento pendente'
-  return <><PageTitle eyebrow="INSCRIÇÃO" title="Entre para a temporada." detail="Sua participação só fica ativa após a confirmação manual do PIX." />{busy && !season ? <div className="form-panel"><p>Carregando temporada disponível...</p></div> : !season ? <div className="score-info"><CircleHelp size={18} /><div><strong>Nenhuma temporada disponível no momento.</strong><p>Assim que uma temporada estiver em período de inscrição, ela aparecerá aqui.</p></div></div> : <div className="form-panel enrollment-panel"><span className="eyebrow">INSCRIÇÃO</span><h2>{season.name}</h2><p>{season.description ?? 'Consistência que transforma.'}</p><div className="enrollment-details"><span>Período <strong>{new Date(season.start_date).toLocaleDateString('pt-BR')} a {new Date(season.end_date).toLocaleDateString('pt-BR')}</strong></span><span>Taxa <strong>R$ {Number(season.entry_fee).toFixed(2).replace('.', ',')}</strong></span></div>{!payment ? <><div className="baseline-fields"><span className="eyebrow">SEU PONTO DE PARTIDA</span><p className="submit-hint">A evolução compara você com você mesmo, e este número fica congelado depois da inscrição. Não envolve peso, medidas nem aparência — informe como está sua rotina hoje.</p><div className="form-row"><label>Minutos de atividade por dia<input type="number" min={0} max={480} placeholder="ex.: 20" value={baseMinutes} onChange={event => { setBaseMinutes(event.target.value); setError('') }} /></label><label>Passos por dia<input type="number" min={0} max={100000} placeholder="ex.: 4500" value={baseSteps} onChange={event => { setBaseSteps(event.target.value); setError('') }} /></label></div></div><button className="primary-button full" disabled={busy} onClick={request}>{busy ? 'Criando inscrição...' : 'Participar da temporada'} <ArrowUpRight size={16} /></button></> : <><div className="pix-instructions"><strong>Pagamento PIX</strong><p>Envie R$ {Number(payment.amount).toFixed(2).replace('.', ',')} para a chave:</p><div className="pix-key-row"><strong>{season.pix_key ?? 'Chave PIX ainda não configurada'}</strong>{season.pix_key && <button className="icon-button" aria-label="Copiar chave PIX" title="Copiar chave PIX" onClick={copyPixKey}><Copy size={16} /></button>}</div><span>Status: {statusLabel}</span>{declared && <p className="submit-hint">Seu ponto de partida registrado: {declared.average_active_minutes} min/dia e {declared.average_steps} passos/dia. Não muda ao reenviar o comprovante; se estiver errado, fale com a organização.</p>}{payment?.payment_status === 'rejected' && <p className="submit-hint">Sua inscrição foi recusada. Verifique o valor e a chave, refaça o PIX e anexe o novo comprovante abaixo — a inscrição volta para análise automaticamente.</p>}</div>{payment.payment_status === 'pending' && <button className="primary-button full" disabled={busy} onClick={confirmPix}>{busy ? 'Enviando...' : 'Já fiz o PIX'} <Check size={16} /></button>}{payment.payment_status !== 'confirmed' && <label className="upload-proof">Anexar comprovante<input disabled={busy} type="file" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" onChange={e => { setProofFile(e.target.files?.[0] ?? null); setError('') }} /><span className="submit-hint">{proofFile ? `Selecionado: ${proofFile.name}` : 'JPG, PNG ou PDF de até 5 MB.'}</span><button className="primary-button" disabled={busy || !proofFile} onClick={uploadProof}>{busy ? 'Enviando...' : 'Enviar comprovante'} <ArrowUpRight size={16} /></button></label>}{payment.payment_status === 'submitted' && <div className="form-success">Pagamento enviado. Aguardando aprovação.</div>}</>}{message && <div className="form-success">{message}</div>}{error && <div className="form-error">{error}</div>}</div>}</>
+  return <><PageTitle eyebrow="INSCRIÇÃO" title="Entre para a temporada." detail="Sua participação só fica ativa após a confirmação manual do PIX." />{busy && !season ? <div className="form-panel"><p>Carregando temporada disponível...</p></div> : !season ? <div className="score-info"><CircleHelp size={18} /><div><strong>Nenhuma temporada disponível no momento.</strong><p>Assim que uma temporada estiver em período de inscrição, ela aparecerá aqui.</p></div></div> : <div className="form-panel enrollment-panel"><span className="eyebrow">INSCRIÇÃO</span><h2>{season.name}</h2><p>{season.description ?? 'Consistência que transforma.'}</p><div className="enrollment-details"><span>Período <strong>{new Date(season.start_date).toLocaleDateString('pt-BR')} a {new Date(season.end_date).toLocaleDateString('pt-BR')}</strong></span><span>Taxa <strong>R$ {Number(season.entry_fee).toFixed(2).replace('.', ',')}</strong></span></div>{!payment ? <><div className="baseline-fields"><span className="eyebrow">SEU PONTO DE PARTIDA</span><p className="submit-hint">A evolução compara você com você mesmo, e este número fica congelado depois da inscrição. Não envolve peso, medidas nem aparência — informe como está sua rotina hoje.</p><div className="form-row"><label>Minutos de atividade por dia<input type="number" min={0} max={480} placeholder="ex.: 20" value={baseMinutes} onChange={event => { setBaseMinutes(event.target.value); setError('') }} /></label><label>Passos por dia<input type="number" min={0} max={100000} placeholder="ex.: 4500" value={baseSteps} onChange={event => { setBaseSteps(event.target.value); setError('') }} /></label></div></div><button className="primary-button full" disabled={busy} onClick={request}>{busy ? 'Criando inscrição...' : 'Participar da temporada'} <ArrowUpRight size={16} /></button></> : <><div className="pix-instructions"><strong>Pagamento PIX</strong><p>Envie R$ {Number(payment.amount).toFixed(2).replace('.', ',')} para a chave:</p><div className="pix-key-row"><strong>{season.pix_key ?? 'Chave PIX ainda não configurada'}</strong>{season.pix_key && <button className="icon-button" aria-label="Copiar chave PIX" title="Copiar chave PIX" onClick={copyPixKey}><Copy size={16} /></button>}</div><span>Status: {statusLabel}</span>{!declared && <div className="baseline-fields"><span className="eyebrow">FALTA SEU PONTO DE PARTIDA</span><p className="submit-hint">Sua inscrição foi criada antes deste campo existir. Informe como está sua rotina hoje — sem isso a organização não consegue aprovar seu PIX.</p><div className="form-row"><label>Minutos de atividade por dia<input type="number" min={0} max={480} placeholder="ex.: 20" value={baseMinutes} onChange={event => { setBaseMinutes(event.target.value); setError('') }} /></label><label>Passos por dia<input type="number" min={0} max={100000} placeholder="ex.: 4500" value={baseSteps} onChange={event => { setBaseSteps(event.target.value); setError('') }} /></label></div><button className="primary-button" disabled={busy} onClick={fillMissing}>{busy ? 'Salvando...' : 'Registrar ponto de partida'} <Check size={16} /></button></div>}{declared && <p className="submit-hint">Seu ponto de partida registrado: {declared.average_active_minutes} min/dia e {declared.average_steps} passos/dia. Não muda ao reenviar o comprovante; se estiver errado, fale com a organização.</p>}{payment?.payment_status === 'rejected' && <p className="submit-hint">Sua inscrição foi recusada. Verifique o valor e a chave, refaça o PIX e anexe o novo comprovante abaixo — a inscrição volta para análise automaticamente.</p>}</div>{payment.payment_status === 'pending' && <button className="primary-button full" disabled={busy} onClick={confirmPix}>{busy ? 'Enviando...' : 'Já fiz o PIX'} <Check size={16} /></button>}{payment.payment_status !== 'confirmed' && <label className="upload-proof">Anexar comprovante<input disabled={busy} type="file" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" onChange={e => { setProofFile(e.target.files?.[0] ?? null); setError('') }} /><span className="submit-hint">{proofFile ? `Selecionado: ${proofFile.name}` : 'JPG, PNG ou PDF de até 5 MB.'}</span><button className="primary-button" disabled={busy || !proofFile} onClick={uploadProof}>{busy ? 'Enviando...' : 'Enviar comprovante'} <ArrowUpRight size={16} /></button></label>}{payment.payment_status === 'submitted' && <div className="form-success">Pagamento enviado. Aguardando aprovação.</div>}</>}{message && <div className="form-success">{message}</div>}{error && <div className="form-error">{error}</div>}</div>}</>
 }
 
 function AuthScreen({ configured }: { configured: boolean }) {
@@ -858,10 +867,26 @@ function AdminBaselines() {
     ])
     if (baselineResult.error) { setError(baselineResult.error.message); return }
     setError('')
+    const { data: missingData } = await supabase.rpc('admin_missing_baselines', { p_season_id: seasonId })
+    setMissing((missingData ?? []) as Array<{ user_id: string; full_name: string; payment_status: string }>)
     setRows((baselineResult.data ?? []) as unknown as AdminBaselineRow[])
     setParticipants(countResult.count ?? 0)
   }
   useEffect(() => { load() }, [seasonId])
+
+  const [missing, setMissing] = useState<Array<{ user_id: string; full_name: string; payment_status: string }>>([])
+  const [draft, setDraft] = useState<Record<string, { minutes: string; steps: string }>>({})
+
+  const saveFor = async (targetId: string, override?: { minutes: string; steps: string }) => {
+    if (!supabase || !seasonId) return
+    const entry = override ?? draft[targetId] ?? { minutes: '', steps: '' }
+    if (entry.minutes.trim() === '' || entry.steps.trim() === '') { setError('Preencha minutos e passos.'); return }
+    setBusy(true); setError(''); setMessage('')
+    const { error: rpcError } = await supabase.rpc('admin_set_baseline', { p_season_id: seasonId, p_user_id: targetId, p_average_active_minutes: Number(entry.minutes), p_average_steps: Number(entry.steps) })
+    setBusy(false)
+    if (rpcError) setError(rpcError.message)
+    else { setMessage('Ponto de partida salvo.'); setDraft(current => ({ ...current, [targetId]: { minutes: '', steps: '' } })); load() }
+  }
 
   const freeze = async () => {
     if (!supabase || !seasonId) return
@@ -888,6 +913,21 @@ function AdminBaselines() {
       <button className="primary-button" disabled={busy || rows.length === 0} onClick={freeze}>{busy ? 'Congelando...' : 'Congelar pontos de partida'} <Lock size={16} /></button>
     </div>
 
+    {missing.length > 0 && <section className="admin-review">
+      <SectionHeading title="Sem ponto de partida" />
+      <div className="admin-review-list">{missing.map(person => <div className="admin-review-row" key={person.user_id}>
+        <div>
+          <strong>{person.full_name}</strong>
+          <span>pagamento: {person.payment_status} · o PIX não pode ser aprovado sem este preenchimento</span>
+          <div className="form-row">
+            <label>Minutos/dia<input type="number" min={0} max={480} value={draft[person.user_id]?.minutes ?? ''} onChange={event => setDraft(current => ({ ...current, [person.user_id]: { minutes: event.target.value, steps: current[person.user_id]?.steps ?? '' } }))} /></label>
+            <label>Passos/dia<input type="number" min={0} max={100000} value={draft[person.user_id]?.steps ?? ''} onChange={event => setDraft(current => ({ ...current, [person.user_id]: { minutes: current[person.user_id]?.minutes ?? '', steps: event.target.value } }))} /></label>
+          </div>
+        </div>
+        <button className="text-button" disabled={busy} onClick={() => saveFor(person.user_id)}>Salvar</button>
+      </div>)}</div>
+    </section>}
+
     <section className="admin-review">
       <SectionHeading title="Declarações" />
       <div className="admin-review-list">{rows.length === 0 ? <p className="admin-empty">Ninguém preencheu ainda.</p>
@@ -897,7 +937,16 @@ function AdminBaselines() {
               <span>{row.average_active_minutes} min/dia · {row.average_steps} passos/dia</span>
               <small>{row.frozen_at ? `congelado em ${new Date(row.frozen_at).toLocaleDateString('pt-BR')}` : 'ainda pode ser alterado'}</small>
             </div>
-            <span className={row.frozen_at ? 'status-pill status-validated' : 'status-pill'}>{row.frozen_at ? 'congelado' : 'aberto'}</span>
+            <div className="review-actions">
+              <span className={row.frozen_at ? 'status-pill status-validated' : 'status-pill'}>{row.frozen_at ? 'congelado' : 'aberto'}</span>
+              {!row.frozen_at && <button className="text-button" disabled={busy} onClick={() => {
+                const minutes = window.prompt(`Minutos por dia de ${row.profiles?.full_name ?? 'participante'}:`, String(row.average_active_minutes))
+                if (minutes === null) return
+                const steps = window.prompt('Passos por dia:', String(row.average_steps))
+                if (steps === null) return
+                saveFor(row.user_id, { minutes, steps })
+              }}>Corrigir</button>}
+            </div>
           </div>)}</div>
     </section>
   </>
@@ -1110,9 +1159,143 @@ function AdminSettings() {
 
 function Badge({ icon, title, unlocked = false }: { icon: string; title: string; unlocked?: boolean }) { return <div className={`badge ${unlocked ? 'unlocked' : ''}`}><span>{unlocked ? icon : '◌'}</span><strong>{title}</strong>{unlocked && <small>conquistado</small>}</div> }
 
-function ProfilePage({ profile, onNavigate, onAction }: { profile: Profile | null; onNavigate: (page: Page) => void; onAction: (message: string) => void }) { const { updateProfile } = useAuth(); const [name, setName] = useState(profile?.full_name ?? ''); const [phone, setPhone] = useState(profile?.phone ?? ''); const [busy, setBusy] = useState(false); const [message, setMessage] = useState(''); const [error, setError] = useState(''); useEffect(() => { setName(profile?.full_name ?? ''); setPhone(profile?.phone ?? '') }, [profile]); const save = async (event: React.FormEvent) => { event.preventDefault(); setBusy(true); setError(''); setMessage(''); const result = await updateProfile({ fullName: name, phone }); setBusy(false); if (result.error) setError(result.error.message); else setMessage('Perfil atualizado.') }; return <><section className="profile-head"><div className="profile-avatar">{profile?.avatar_emoji || '🪩'}<span className="status-check"><Check size={11} /></span></div><div><span className="eyebrow">SEU PERFIL</span><h1>{profile?.full_name ?? 'Seu perfil'}</h1><p>{profile?.email ?? 'Conta autenticada'} · participante {profile?.status === 'pending' ? 'pendente' : 'ativo'}</p></div><button className="icon-button" aria-label="Editar perfil"><MoreHorizontal size={20} /></button></section><form className="form-panel profile-edit-form" onSubmit={save}><label>Nome completo<input required minLength={2} maxLength={120} value={name} onChange={event => setName(event.target.value)} /></label><label>Celular<input value={phone} onChange={event => setPhone(event.target.value)} autoComplete="tel" /></label><p className="form-note"><Lock size={13} /> E-mail, status e permissão são controlados pelo sistema.</p><button className="primary-button" disabled={busy}>{busy ? 'Salvando...' : 'Salvar perfil'} <Check size={16} /></button>{message && <div className="form-success">{message}</div>}{error && <div className="form-error">{error}</div>}</form><div className="profile-stats"><div><strong>Dados oficiais</strong><span>pontuação no ranking</span></div><div><strong>Privado</strong><span>sem dados corporais</span></div><div><strong>Seguro</strong><span>RLS ativo</span></div></div><BaselineCard /><SectionHeading title="Seus badges" action="Ver todos" onClick={() => onNavigate('challenges')} /><div className="badge-grid profile-badges"><Badge icon="🔥" title="Primeiro streak" unlocked /><Badge icon="🚀" title="Virada de jogo" unlocked /><Badge icon="🧭" title="Explorador" unlocked /></div><div className="settings-list"><button onClick={() => onAction('Notificações atualizadas.')}><Bell size={18} /><span>Notificações</span><small>Ativas</small><ChevronRight size={17} /></button><button onClick={() => onNavigate('rules')}><ShieldCheck size={18} /><span>Privacidade e LGPD</span><ChevronRight size={17} /></button></div></> }
+function ProfilePage({ profile, onNavigate, onAction }: { profile: Profile | null; onNavigate: (page: Page) => void; onAction: (message: string) => void }) { const { updateProfile } = useAuth(); const [name, setName] = useState(profile?.full_name ?? ''); const [phone, setPhone] = useState(profile?.phone ?? ''); const [busy, setBusy] = useState(false); const [message, setMessage] = useState(''); const [error, setError] = useState(''); useEffect(() => { setName(profile?.full_name ?? ''); setPhone(profile?.phone ?? '') }, [profile]); const save = async (event: React.FormEvent) => { event.preventDefault(); setBusy(true); setError(''); setMessage(''); const result = await updateProfile({ fullName: name, phone }); setBusy(false); if (result.error) setError(result.error.message); else setMessage('Perfil atualizado.') }; return <><section className="profile-head"><div className="profile-avatar">{profile?.avatar_emoji || '🪩'}<span className="status-check"><Check size={11} /></span></div><div><span className="eyebrow">SEU PERFIL</span><h1>{profile?.full_name ?? 'Seu perfil'}</h1><p>{profile?.email ?? 'Conta autenticada'} · participante {profile?.status === 'pending' ? 'pendente' : 'ativo'}</p></div><button className="icon-button" aria-label="Editar perfil"><MoreHorizontal size={20} /></button></section><form className="form-panel profile-edit-form" onSubmit={save}><label>Nome completo<input required minLength={2} maxLength={120} value={name} onChange={event => setName(event.target.value)} /></label><label>Celular<input value={phone} onChange={event => setPhone(event.target.value)} autoComplete="tel" /></label><p className="form-note"><Lock size={13} /> E-mail, status e permissão são controlados pelo sistema.</p><button className="primary-button" disabled={busy}>{busy ? 'Salvando...' : 'Salvar perfil'} <Check size={16} /></button>{message && <div className="form-success">{message}</div>}{error && <div className="form-error">{error}</div>}</form><div className="profile-stats"><div><strong>Dados oficiais</strong><span>pontuação no ranking</span></div><div><strong>Privado</strong><span>sem dados corporais</span></div><div><strong>Seguro</strong><span>RLS ativo</span></div></div><BaselineCard /><WildcardsCard /><SectionHeading title="Seus badges" action="Ver todos" onClick={() => onNavigate('challenges')} /><div className="badge-grid profile-badges"><Badge icon="🔥" title="Primeiro streak" unlocked /><Badge icon="🚀" title="Virada de jogo" unlocked /><Badge icon="🧭" title="Explorador" unlocked /></div><div className="settings-list"><button onClick={() => onAction('Notificações atualizadas.')}><Bell size={18} /><span>Notificações</span><small>Ativas</small><ChevronRight size={17} /></button><button onClick={() => onNavigate('privacy')}><ShieldCheck size={18} /><span>Privacidade e LGPD</span><ChevronRight size={17} /></button></div></> }
 
-function RulesPage() { return <><PageTitle eyebrow="MANUAL MOVE" title="O jogo é consistência." detail="Regras claras para uma competição leve, justa e divertida." /><div className="rules-intro"><Target size={22} /><p>A meta não é ser o mais intenso. É aparecer por você, um dia de cada vez.</p></div><RuleBlock title="Temporada" text="Cada temporada dura 8 semanas. A Semana 0 é dedicada ao onboarding e à definição do seu baseline. O 7º dia de cada semana é descanso e não pontua." /><RuleBlock title="Meta diária" text="Complete 30 minutos de atividade contínua ou alcance 8.000 passos. Você tem até 6 dias pontuáveis por semana." /><RuleBlock title="Como a pontuação é calculada" text="Consistência: 10 pontos por dia completo, até 60 por semana, mais 15 pontos ao completar 5 dias ou mais. Evolução: 1 ponto a cada 2% de melhoria contra seu baseline, até 25 pontos. Volume: 1 ponto a cada 40 MET-min, até 20 pontos. O teto semanal é 120 pontos." /><RuleBlock title="Duelos" text="Você pode desafiar um participante por semana, sempre nos quatro primeiros dias. A pessoa tem 24 horas para aceitar ou recusar, sem penalidade se recusar. Vence quem concluir mais dias na semana; empate desempata por consistência e depois por volume. O vencedor ganha pontos que somam por fora do teto semanal. No máximo dois duelos com a mesma pessoa por temporada." /><RuleBlock title="Prêmios e acúmulo" text="O valor arrecadado é dividido entre campeão, segundo, terceiro, maior evolução e um rateio entre quem mantiver a consistência mínima. As categorias acumulam: quem for campeão e também tiver a maior evolução recebe as duas fatias, e quem está no pódio continua entrando no rateio de consistência. O melhor desempenho é premiado por inteiro, sem prêmio de consolo." /><RuleBlock title="Coringas" text="Você recebe 2 coringas por temporada. Use um para neutralizar um dia perdido sem quebrar seu streak. Coringas não geram pontos, apenas protegem sua consistência." /><RuleBlock title="Jogo limpo e privacidade" text="O ranking nunca usa peso, IMC, gordura corporal, medidas ou aparência. Dados são usados apenas para autenticação, competição e comunicação. No modo Supabase, o cálculo final deve ser validado no servidor via RPC ou Edge Function, com baseline congelado, timestamp, janela de edição e trilha de auditoria." /></> }
+type WildcardInfo = {
+  season: { id: string; name: string } | null
+  used: number; remaining: number
+  history: Array<{ used_on: string; reason: string }>
+  open_days: string[]
+}
+
+function WildcardsCard() {
+  const [info, setInfo] = useState<WildcardInfo | null>(null)
+  const [day, setDay] = useState('')
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+
+  const load = async () => {
+    if (!supabase) return
+    const { data, error: rpcError } = await supabase.rpc('my_wildcards')
+    if (rpcError) setError(rpcError.message); else setInfo(data as WildcardInfo)
+  }
+  useEffect(() => { load() }, [])
+
+  const use = async () => {
+    if (!supabase) return
+    if (!day) { setError('Escolha o dia que você perdeu.'); return }
+    if (reason.trim().length < 2) { setError('Escreva o motivo.'); return }
+    if (!window.confirm(`Usar um coringa no dia ${new Date(`${day}T12:00:00`).toLocaleDateString('pt-BR')}? Você tem ${info?.remaining ?? 0} na temporada inteira.`)) return
+    setBusy(true); setError(''); setMessage('')
+    const { error: rpcError } = await supabase.rpc('use_wildcard', { p_used_on: day, p_reason: reason })
+    setBusy(false)
+    if (rpcError) setError(rpcError.message)
+    else { setDay(''); setReason(''); setMessage('Coringa aplicado.'); load() }
+  }
+
+  if (!info?.season) return null
+
+  return <section className="admin-review">
+    <SectionHeading title="Coringas" />
+    <div className="form-panel">
+      <div className="wildcard-count">
+        {[0, 1].map(index => <i key={index} className={index < info.remaining ? 'available' : 'spent'}>🧩</i>)}
+        <span>{info.remaining} de 2 disponíveis nesta temporada</span>
+      </div>
+      <p className="submit-hint">O coringa protege um dia que você perdeu: ele conta como dia presente para o bônus semanal e para a consistência do prêmio, mas não gera pontos. Vale apenas para os últimos 7 dias e não entra em duelo.</p>
+
+      {info.remaining > 0 && info.open_days.length > 0 && <>
+        <div className="form-row">
+          <label>Dia perdido<select value={day} onChange={event => { setDay(event.target.value); setError('') }}>
+            <option value="">Selecione</option>
+            {info.open_days.map(value => <option key={value} value={value}>{new Date(`${value}T12:00:00`).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' })}</option>)}
+          </select></label>
+          <label>Motivo<input maxLength={240} placeholder="ex.: viagem de trabalho" value={reason} onChange={event => { setReason(event.target.value); setError('') }} /></label>
+        </div>
+        <button className="primary-button" disabled={busy} onClick={use}>{busy ? 'Aplicando...' : 'Usar coringa'} <Check size={16} /></button>
+      </>}
+
+      {info.remaining > 0 && info.open_days.length === 0 && <p className="form-note"><Check size={13} /> Nenhum dia em aberto nos últimos 7 dias. Nada a proteger por enquanto.</p>}
+      {info.remaining === 0 && <p className="form-note"><Lock size={13} /> Seus dois coringas já foram usados nesta temporada.</p>}
+
+      {info.history.length > 0 && <div className="wildcard-history">
+        <span className="eyebrow">JÁ USADOS</span>
+        {info.history.map(item => <div className="result-row" key={item.used_on}>
+          <div><strong>{new Date(`${item.used_on}T12:00:00`).toLocaleDateString('pt-BR')}</strong><span>{item.reason}</span></div>
+        </div>)}
+      </div>}
+
+      {message && <div className="form-success">{message}</div>}
+      {error && <div className="form-error">{error}</div>}
+    </div>
+  </section>
+}
+
+type SeasonRules = { id: string; name: string; start_date: string; end_date: string; rules: Record<string, number> | null }
+
+function RulesPage() {
+  const [season, setSeason] = useState<SeasonRules | null>(null)
+  const [prizes, setPrizes] = useState<Record<string, number> | null>(null)
+  useEffect(() => {
+    if (!supabase) return
+    supabase.from('seasons').select('id, name, start_date, end_date, rules')
+      .in('status', ['registration', 'active']).order('start_date', { ascending: false }).limit(1).maybeSingle()
+      .then(({ data }) => {
+        const row = data as SeasonRules | null
+        setSeason(row)
+        if (row) supabase!.from('season_prizes').select('*').eq('season_id', row.id).maybeSingle()
+          .then(({ data: prizeData }) => setPrizes(prizeData as Record<string, number> | null))
+      })
+  }, [])
+
+  const rule = (key: string, fallback: number) => Number(season?.rules?.[key] ?? fallback)
+  const weeks = season ? Math.max(1, Math.ceil(((new Date(season.end_date).getTime() - new Date(season.start_date).getTime()) / 86400000 + 1) / 7)) : 8
+  const pct = (key: string, fallback: number) => Number(prizes?.[key] ?? fallback)
+
+  return <>
+    <PageTitle eyebrow="MANUAL MOVE" title="O jogo é consistência." detail={season ? `Regras da ${season.name}.` : 'Regras claras para uma competição leve, justa e divertida.'} />
+    <div className="rules-intro"><Target size={22} /><p>A meta não é ser o mais intenso. É aparecer por você, um dia de cada vez.</p></div>
+
+    <RuleBlock title="Temporada" text={`Esta temporada tem ${weeks} semana(s), de ${season ? new Date(`${season.start_date}T12:00:00`).toLocaleDateString('pt-BR') : '—'} a ${season ? new Date(`${season.end_date}T12:00:00`).toLocaleDateString('pt-BR') : '—'}. Cada semana tem 6 dias que pontuam; o sétimo é descanso e não conta.`} />
+
+    <RuleBlock title="Ponto de partida" text="Na inscrição você informa sua média de minutos de atividade e de passos por dia. É contra esse número que sua evolução é medida, e ele é congelado pela organização antes da temporada começar. Nada aqui envolve peso, medidas ou aparência." />
+
+    <RuleBlock title="Meta diária" text={`Complete ${rule('daily_minutes', 30)} minutos de atividade ou alcance ${rule('daily_steps', 8000).toLocaleString('pt-BR')} passos. A atividade precisa de comprovante e só conta depois de validada pela organização.`} />
+
+    <RuleBlock title="Como a pontuação é calculada" text={`Consistência: ${rule('consistency_per_day', 10)} pontos por dia concluído, até ${rule('weekly_consistency_cap', 60)} por semana, mais ${rule('bonus_points', 15)} pontos ao fechar ${rule('bonus_days', 5)} dias ou mais. Evolução: 1 ponto a cada 2% de melhora sobre seu ponto de partida, até ${rule('evolution_cap', 25)}. Volume: 1 ponto a cada ${rule('met_min_per_point', 40)} MET-min, até ${rule('volume_cap', 20)}. O teto é 120 pontos por semana.`} />
+
+    <RuleBlock title="Duelos" text={`Você pode desafiar uma pessoa por semana, nos quatro primeiros dias. Ela tem 24 horas para aceitar ou recusar, sem penalidade se recusar. Vence quem concluir mais dias na semana; empate desempata por consistência e depois por volume. O vencedor ganha ${rule('duel_points', 10)} pontos que somam por fora do teto semanal. Dá para desistir a qualquer momento, e aí o adversário vence na hora. No máximo dois duelos com a mesma pessoa por temporada.`} />
+
+    <RuleBlock title="Coringas" text="Você tem 2 coringas por temporada. Use um para proteger um dia que perdeu: ele conta como dia presente para o bônus semanal e para a consistência que qualifica ao prêmio, mas não gera pontos e não vale em duelo. Só pode ser usado nos últimos 7 dias, num dia que você não concluiu, e exige um motivo que fica registrado." />
+
+    <RuleBlock title="Prêmios e acúmulo" text={`O valor arrecadado é dividido assim: ${pct('champion_percent', 40)}% para o campeão, ${pct('second_percent', 20)}% para o segundo, ${pct('third_percent', 10)}% para o terceiro, ${pct('evolution_percent', 15)}% para quem mais evoluiu e ${pct('consistency_percent', 15)}% rateados entre quem fechar pelo menos ${pct('min_consistency_percent', 80)}% dos dias. As categorias acumulam: quem for campeão e também tiver a maior evolução recebe as duas fatias, e quem está no pódio continua entrando no rateio. O melhor desempenho é premiado por inteiro, sem prêmio de consolo.`} />
+
+    <RuleBlock title="Jogo limpo" text="O ranking nunca usa peso, IMC, gordura corporal, medidas ou aparência. Toda pontuação é calculada no servidor a partir de atividades validadas, com registro de quem aprovou o quê. Comprovante é obrigatório e o histórico fica disponível para consulta." />
+  </>
+}
+
+function PrivacyPage() {
+  return <>
+    <PageTitle eyebrow="PRIVACIDADE" title="O que guardamos, e por quê." detail="Escrito em português claro, sem letra miúda." />
+
+    <RuleBlock title="O que é coletado" text="Seu nome, e-mail e celular, informados no cadastro. Sua média de minutos e passos declarada na inscrição. As atividades que você registra, com horário de início e fim, duração, tipo e passos. Os comprovantes que você anexa. Sua pontuação, duelos, coringas e grupos." />
+
+    <RuleBlock title="O que não é coletado" text="Peso, altura, IMC, percentual de gordura, medidas corporais, fotos de corpo, dados de saúde e localização. Nada disso é pedido, guardado ou usado em qualquer cálculo." />
+
+    <RuleBlock title="Comprovantes" text="O comprovante de PIX e o comprovante de atividade ficam guardados em arquivos privados. Só você e a organização da temporada conseguem abri-los. O comprovante de PIX costuma conter seu nome e o banco usado — se preferir, você pode ocultar dados sensíveis na imagem antes de anexar, desde que o valor e a data continuem legíveis." />
+
+    <RuleBlock title="Quem vê o quê" text="Os outros participantes veem seu nome, seu emoji, sua pontuação, sua posição no ranking e os duelos de que você participa. Não veem seus comprovantes, seu e-mail, seu celular, seu ponto de partida nem o motivo dos seus coringas. A organização vê tudo isso, porque precisa aprovar pagamentos e validar atividades." />
+
+    <RuleBlock title="Por quanto tempo" text="Os dados da temporada ficam guardados enquanto o app existir, para que o histórico e os resultados continuem consultáveis. Se você quiser apagar sua conta e seus dados, peça à organização: seus registros são removidos e seu nome sai dos rankings publicados." />
+
+    <RuleBlock title="Segurança" text="O acesso é por e-mail e senha. O banco de dados aplica regras que impedem alguém de ler ou alterar dados de outra pessoa, e ações administrativas ficam registradas com data e autor. Nenhum dado é vendido, compartilhado com terceiros ou usado para publicidade." />
+
+    <div className="score-info"><CircleHelp size={18} /><div><strong>Dúvidas</strong><p>Qualquer pergunta sobre seus dados, fale direto com quem organiza a temporada.</p></div></div>
+  </>
+}
+
 function RuleBlock({ title, text }: { title: string; text: string }) { return <article className="rule-block"><span className="rule-number">{title.slice(0, 1)}</span><div><h2>{title}</h2><p>{text}</p></div></article> }
 
 function RegisterModal({ season, activeSession, completedSession, onClose, onStarted, onCompleted, onCancelled, onDone }: { season: CurrentSeason | null; activeSession: ActivitySession | null; completedSession?: ActivitySession | null; onClose: () => void; onCancelled: () => void; onStarted: (session: ActivitySession) => void; onCompleted?: (session: ActivitySession) => void; onDone: (session: ActivitySession) => void }) { return <div className="modal-backdrop" onMouseDown={activeSession ? undefined : onClose}><div className="register-modal" onMouseDown={e => e.stopPropagation()}><div className="modal-head"><div><span className="eyebrow">{activeSession ? 'SESSÃO ATIVA' : 'NOVO MOVIMENTO'}</span><h2>{activeSession ? 'Continue no seu ritmo.' : 'Comece seu movimento.'}</h2></div>{!activeSession && <button className="icon-button" onClick={onClose}><X size={20} /></button>}</div><ActivitySessionForm season={season} activeSession={activeSession} completedSession={completedSession ?? null} onStarted={onStarted} onCompleted={onCompleted ?? (() => undefined)} onCancelled={onCancelled} onDone={onDone} /></div></div> }
