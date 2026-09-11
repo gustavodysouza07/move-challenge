@@ -1,18 +1,3 @@
-function ActivityHistoryPage({ userId }: { userId: string }) {
-  const [sessions, setSessions] = useState<Array<ActivitySession & { season_id: string; points: number | null; proof: string | null }>>([])
-  const [loading, setLoading] = useState(true)
-  useEffect(() => {
-    if (!supabase) { setLoading(false); return }
-    const load = async () => {
-      const { data } = await supabase.from('activity_sessions').select('id, activity_type, started_at, ended_at, status, duration_seconds, paused_seconds, season_id, activity_proofs(storage_path), activity_score_contributions(consistency_points, evolution_points, volume_points)').eq('user_id', userId).order('started_at', { ascending: false })
-      const mapped = (data ?? []).map(item => { const row = item as unknown as ActivitySession & { season_id: string; activity_proofs?: { storage_path: string | null }[]; activity_score_contributions?: { consistency_points: number; evolution_points: number; volume_points: number }[] }; const contribution = row.activity_score_contributions?.[0]; return { ...row, points: contribution ? Number(contribution.consistency_points) + Number(contribution.evolution_points) + Number(contribution.volume_points) : null, proof: row.activity_proofs?.[0]?.storage_path ?? null } })
-      setSessions(mapped); setLoading(false)
-    }
-    load()
-  }, [userId])
-  const groups = [['active', 'Em andamento'], ['pending_validation', 'Aguardando aprovação'], ['validated', 'Aprovadas'], ['rejected', 'Rejeitadas']] as const
-  return <><PageTitle eyebrow="HISTÓRICO" title="Minhas atividades" detail="Atividades e validações vinculadas à sua conta." />{loading ? <div className="form-panel"><p>Carregando atividades...</p></div> : sessions.length === 0 ? <div className="score-info"><History size={18} /><div><strong>Nenhuma atividade registrada</strong><p>Quando você concluir uma atividade, ela aparecerá aqui.</p></div></div> : groups.map(([status, title]) => { const rows = sessions.filter(session => session.status === status); return <section className="activity-history-group" key={status}><SectionHeading title={`${title} · ${rows.length}`} />{rows.length === 0 ? <p className="admin-empty">Nenhuma atividade nesta categoria.</p> : rows.map(session => <article className="activity-history-row" key={session.id}><div><strong>{session.activity_type}</strong><span>{new Date(session.started_at).toLocaleDateString('pt-BR')} · {new Date(session.started_at).toLocaleTimeString('pt-BR')} {session.ended_at ? `até ${new Date(session.ended_at).toLocaleTimeString('pt-BR')}` : ''}</span><small>Duração: {formatDuration(session.duration_seconds ?? 0)}{session.points !== null ? ` · ${session.points} pontos` : ''}{session.proof ? ' · comprovante anexado' : ''}</small></div><span className={`status-badge ${status}`}>{title}</span></article>)}</section> })}</>
-}
 import { useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import {
@@ -118,29 +103,41 @@ function EnrollmentPage() {
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [baseMinutes, setBaseMinutes] = useState('')
-  const [baseSteps, setBaseSteps] = useState('')
   const [declared, setDeclared] = useState<{ average_active_minutes: number; average_steps: number } | null>(null)
   const [proofFile, setProofFile] = useState<File | null>(null)
   useEffect(() => { if (!supabase || !user) { setBusy(false); return }; const load = async () => { const { data: seasonData } = await supabase.from('seasons').select('id, name, description, entry_fee, pix_key, start_date, end_date').eq('status', 'registration').order('start_date', { ascending: true }).limit(1).maybeSingle(); setSeason(seasonData); if (seasonData) { const { data: paymentData } = await supabase.from('payments').select('id, amount, payment_status, proof_url').eq('user_id', user.id).eq('season_id', seasonData.id).maybeSingle(); setPayment(paymentData); const { data: baselineData } = await supabase.from('baseline_metrics').select('average_active_minutes, average_steps').eq('user_id', user.id).eq('season_id', seasonData.id).maybeSingle(); setDeclared(baselineData) }; setBusy(false) }; load() }, [user])
   const fillMissing = async () => {
     if (!supabase) return
-    if (baseMinutes.trim() === '' || baseSteps.trim() === '') { setError('Preencha seus minutos e passos por dia.'); return }
+    if (baseMinutes.trim() === '') {
+  setError('Informe seus minutos de atividade por dia.')
+  return
+}
     setBusy(true); setError('')
-    const { data, error: rpcError } = await supabase.rpc('set_missing_baseline', { p_average_active_minutes: Number(baseMinutes), p_average_steps: Number(baseSteps) })
+    const { data, error: rpcError } = await supabase.rpc('set_missing_baseline', {
+  p_average_active_minutes: Number(baseMinutes),
+  p_average_steps: 0,
+})
     setBusy(false)
     if (rpcError) setError(rpcError.message)
     else { setDeclared(data as { average_active_minutes: number; average_steps: number }); setMessage('Ponto de partida registrado.') }
   }
   const request = async () => {
     if (!supabase || !season) return
-    if (baseMinutes.trim() === '' || baseSteps.trim() === '') { setError('Preencha seus minutos e passos por dia antes de se inscrever.'); return }
+   if (baseMinutes.trim() === '') {
+  setError('Informe seus minutos de atividade por dia antes de se inscrever.')
+  return
+}
     setBusy(true); setError('')
-    const { data, error: rpcError } = await supabase.rpc('request_season_participation', { p_season_id: season.id, p_average_active_minutes: Number(baseMinutes), p_average_steps: Number(baseSteps) }); setBusy(false); if (rpcError) setError(rpcError.message); else { setPayment(data); setMessage('Inscrição criada. Faça o PIX e confirme o envio do pagamento.') } }
+   const { data, error: rpcError } = await supabase.rpc('request_season_participation', {
+  p_season_id: season.id,
+  p_average_active_minutes: Number(baseMinutes),
+  p_average_steps: 0,
+}); setBusy(false); if (rpcError) setError(rpcError.message); else { setPayment(data); setMessage('Inscrição criada. Faça o PIX e confirme o envio do pagamento.') } }
   const confirmPix = async () => { if (!supabase || !payment) return; setBusy(true); setError(''); const { data, error: updateError } = await supabase.from('payments').update({ payment_status: 'submitted' }).eq('id', payment.id).select('id, amount, payment_status, proof_url').single(); setBusy(false); if (updateError) setError(updateError.message); else { setPayment(data); setMessage('Pagamento enviado. Aguardando aprovação.') } }
   const copyPixKey = async () => { if (!season.pix_key) return; try { await navigator.clipboard.writeText(season.pix_key); setMessage('Chave PIX copiada.') } catch { setError('Não foi possível copiar a chave PIX.') } }
   const uploadProof = async () => { const file = proofFile; if (!supabase || !payment || !user || !file) { setError('Escolha o arquivo do comprovante antes de enviar.'); return } setError(''); const allowed = ['image/jpeg', 'image/png', 'application/pdf']; if (!allowed.includes(file.type) || file.size > 5 * 1024 * 1024) { setError('Envie somente JPG, JPEG, PNG ou PDF de até 5 MB.'); return }; setBusy(true); const path = `${user.id}/${payment.id}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '-')}`; const upload = await supabase.storage.from('payment-proofs').upload(path, file, { upsert: false, contentType: file.type }); if (upload.error) { setBusy(false); setError(upload.error.message); return }; const { data, error: submitError } = await supabase.rpc('submit_payment_proof', { p_payment_id: payment.id, p_storage_path: path }); setBusy(false); if (submitError) setError(submitError.message); else { setProofFile(null); setPayment(data); setMessage('Comprovante enviado. A confirmação depende da revisão administrativa.') } }
   const statusLabel = payment?.payment_status === 'submitted' ? 'aguardando confirmação' : payment?.payment_status === 'confirmed' ? 'aprovado' : payment?.payment_status === 'rejected' ? 'rejeitado' : 'pagamento pendente'
-  return <><PageTitle eyebrow="INSCRIÇÃO" title="Entre para a temporada." detail="Sua participação só fica ativa após a confirmação manual do PIX." />{busy && !season ? <div className="form-panel"><p>Carregando temporada disponível...</p></div> : !season ? <div className="score-info"><CircleHelp size={18} /><div><strong>Nenhuma temporada disponível no momento.</strong><p>Assim que uma temporada estiver em período de inscrição, ela aparecerá aqui.</p></div></div> : <div className="form-panel enrollment-panel"><span className="eyebrow">INSCRIÇÃO</span><h2>{season.name}</h2><p>{season.description ?? 'Consistência que transforma.'}</p><div className="enrollment-details"><span>Período <strong>{new Date(season.start_date).toLocaleDateString('pt-BR')} a {new Date(season.end_date).toLocaleDateString('pt-BR')}</strong></span><span>Taxa <strong>R$ {Number(season.entry_fee).toFixed(2).replace('.', ',')}</strong></span></div>{!payment ? <><div className="baseline-fields"><span className="eyebrow">SEU PONTO DE PARTIDA</span><p className="submit-hint">A evolução compara você com você mesmo, e este número fica congelado depois da inscrição. Não envolve peso, medidas nem aparência — informe como está sua rotina hoje.</p><div className="form-row"><label>Minutos de atividade por dia<input type="number" min={0} max={480} placeholder="ex.: 20" value={baseMinutes} onChange={event => { setBaseMinutes(event.target.value); setError('') }} /></label><label>Passos por dia<input type="number" min={0} max={100000} placeholder="ex.: 4500" value={baseSteps} onChange={event => { setBaseSteps(event.target.value); setError('') }} /></label></div></div><button className="primary-button full" disabled={busy} onClick={request}>{busy ? 'Criando inscrição...' : 'Participar da temporada'} <ArrowUpRight size={16} /></button></> : <><div className="pix-instructions"><strong>Pagamento PIX</strong><p>Envie R$ {Number(payment.amount).toFixed(2).replace('.', ',')} para a chave:</p><div className="pix-key-row"><strong>{season.pix_key ?? 'Chave PIX ainda não configurada'}</strong>{season.pix_key && <button className="icon-button" aria-label="Copiar chave PIX" title="Copiar chave PIX" onClick={copyPixKey}><Copy size={16} /></button>}</div><span>Status: {statusLabel}</span>{!declared && <div className="baseline-fields"><span className="eyebrow">FALTA SEU PONTO DE PARTIDA</span><p className="submit-hint">Sua inscrição foi criada antes deste campo existir. Informe como está sua rotina hoje — sem isso a organização não consegue aprovar seu PIX.</p><div className="form-row"><label>Minutos de atividade por dia<input type="number" min={0} max={480} placeholder="ex.: 20" value={baseMinutes} onChange={event => { setBaseMinutes(event.target.value); setError('') }} /></label><label>Passos por dia<input type="number" min={0} max={100000} placeholder="ex.: 4500" value={baseSteps} onChange={event => { setBaseSteps(event.target.value); setError('') }} /></label></div><button className="primary-button" disabled={busy} onClick={fillMissing}>{busy ? 'Salvando...' : 'Registrar ponto de partida'} <Check size={16} /></button></div>}{declared && <p className="submit-hint">Seu ponto de partida registrado: {declared.average_active_minutes} min/dia e {declared.average_steps} passos/dia. Não muda ao reenviar o comprovante; se estiver errado, fale com a organização.</p>}{payment?.payment_status === 'rejected' && <p className="submit-hint">Sua inscrição foi recusada. Verifique o valor e a chave, refaça o PIX e anexe o novo comprovante abaixo — a inscrição volta para análise automaticamente.</p>}</div>{payment.payment_status === 'pending' && <button className="primary-button full" disabled={busy} onClick={confirmPix}>{busy ? 'Enviando...' : 'Já fiz o PIX'} <Check size={16} /></button>}{payment.payment_status !== 'confirmed' && <label className="upload-proof">Anexar comprovante<input disabled={busy} type="file" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" onChange={e => { setProofFile(e.target.files?.[0] ?? null); setError('') }} /><span className="submit-hint">{proofFile ? `Selecionado: ${proofFile.name}` : 'JPG, PNG ou PDF de até 5 MB.'}</span><button className="primary-button" disabled={busy || !proofFile} onClick={uploadProof}>{busy ? 'Enviando...' : 'Enviar comprovante'} <ArrowUpRight size={16} /></button></label>}{payment.payment_status === 'submitted' && <div className="form-success">Pagamento enviado. Aguardando aprovação.</div>}</>}{message && <div className="form-success">{message}</div>}{error && <div className="form-error">{error}</div>}</div>}</>
+  return <><PageTitle eyebrow="INSCRIÇÃO" title="Entre para a temporada." detail="Sua participação só fica ativa após a confirmação manual do PIX." />{busy && !season ? <div className="form-panel"><p>Carregando temporada disponível...</p></div> : !season ? <div className="score-info"><CircleHelp size={18} /><div><strong>Nenhuma temporada disponível no momento.</strong><p>Assim que uma temporada estiver em período de inscrição, ela aparecerá aqui.</p></div></div> : <div className="form-panel enrollment-panel"><span className="eyebrow">INSCRIÇÃO</span><h2>{season.name}</h2><p>{season.description ?? 'Consistência que transforma.'}</p><div className="enrollment-details"><span>Período <strong>{new Date(season.start_date).toLocaleDateString('pt-BR')} a {new Date(season.end_date).toLocaleDateString('pt-BR')}</strong></span><span>Taxa <strong>R$ {Number(season.entry_fee).toFixed(2).replace('.', ',')}</strong></span></div>{!payment ? <><div className="baseline-fields"><span className="eyebrow">SEU PONTO DE PARTIDA</span><p className="submit-hint">A evolução compara sua rotina atual com seu próprio ponto de partida. Informe quantos minutos de atividade você costuma fazer por dia. Esse dado fica congelado após a inscrição.</p><div className="form-row"><label>Minutos de atividade por dia<input type="number" min={0} max={480} placeholder="ex.: 20" value={baseMinutes} onChange={event => { setBaseMinutes(event.target.value); setError('') }} /></label><label>Passos diários<input type="number" min={0} max={100000} placeholder="ex.: 4500" value={baseSteps} onChange={event => { setBaseSteps(event.target.value); setError('') }} /></label></div></div><button className="primary-button full" disabled={busy} onClick={request}>{busy ? 'Criando inscrição...' : 'Participar da temporada'} <ArrowUpRight size={16} /></button></> : <><div className="pix-instructions"><strong>Pagamento PIX</strong><p>Envie R$ {Number(payment.amount).toFixed(2).replace('.', ',')} para a chave:</p><div className="pix-key-row"><strong>{season.pix_key ?? 'Chave PIX ainda não configurada'}</strong>{season.pix_key && <button className="icon-button" aria-label="Copiar chave PIX" title="Copiar chave PIX" onClick={copyPixKey}><Copy size={16} /></button>}</div><span>Status: {statusLabel}</span>{!declared && <div className="baseline-fields"><span className="eyebrow">FALTA SEU PONTO DE PARTIDA</span><p className="submit-hint">Sua inscrição foi criada antes deste campo existir. Informe quantos minutos de atividade você costuma fazer por dia para registrar seu ponto de partida.</p><div className="form-row"><label>Minutos de atividade por dia<input type="number" min={0} max={480} placeholder="ex.: 20" value={baseMinutes} onChange={event => { setBaseMinutes(event.target.value); setError('') }} /></label><label>Passos diários<input type="number" min={0} max={100000} placeholder="ex.: 4500" value={baseSteps} onChange={event => { setBaseSteps(event.target.value); setError('') }} /></label></div><button className="primary-button" disabled={busy} onClick={fillMissing}>{busy ? 'Salvando...' : 'Registrar ponto de partida'} <Check size={16} /></button></div>}{declared && <p className="submit-hint">Seu ponto de partida registrado: {declared.average_active_minutes} min/dia. Os passos são registrados separadamente, uma vez por dia. Se o ponto de partida estiver errado, fale com a organização.</p>}{payment?.payment_status === 'rejected' && <p className="submit-hint">Sua inscrição foi recusada. Verifique o valor e a chave, refaça o PIX e anexe o novo comprovante abaixo — a inscrição volta para análise automaticamente.</p>}</div>{payment.payment_status === 'pending' && <button className="primary-button full" disabled={busy} onClick={confirmPix}>{busy ? 'Enviando...' : 'Já fiz o PIX'} <Check size={16} /></button>}{payment.payment_status !== 'confirmed' && <label className="upload-proof">Anexar comprovante<input disabled={busy} type="file" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" onChange={e => { setProofFile(e.target.files?.[0] ?? null); setError('') }} /><span className="submit-hint">{proofFile ? `Selecionado: ${proofFile.name}` : 'JPG, PNG ou PDF de até 5 MB.'}</span><button className="primary-button" disabled={busy || !proofFile} onClick={uploadProof}>{busy ? 'Enviando...' : 'Enviar comprovante'} <ArrowUpRight size={16} /></button></label>}{payment.payment_status === 'submitted' && <div className="form-success">Pagamento enviado. Aguardando aprovação.</div>}</>}{message && <div className="form-success">{message}</div>}{error && <div className="form-error">{error}</div>}</div>}</>
 }
 
 function AuthScreen({ configured }: { configured: boolean }) {
@@ -170,6 +167,94 @@ function AuthScreen({ configured }: { configured: boolean }) {
 
 type AdminPayment = { id: string; amount: number; payment_status: string; created_at: string; proof_url: string | null; profiles: { full_name: string; email: string } | null; seasons: { name: string } | null }
 type AdminActivity = { id: string; activity_type: string; started_at: string; ended_at: string | null; duration_seconds: number | null; status: string; source: string; profiles: { full_name: string; avatar_emoji?: string | null } | null; activity_proofs: { proof_type: string; storage_path: string | null; external_reference: string | null }[] }
+
+
+function ActivityHistoryPage({ userId }: { userId: string }) {
+  const [activities, setActivities] = useState<Array<{
+    id: string
+    activity_type: ActivityType
+    started_at: string
+    ended_at: string | null
+    status: string
+    duration_seconds: number | null
+    paused_seconds: number | null
+    activity_proofs: Array<{ storage_path: string | null }>
+  }>>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let mounted = true
+    const load = async () => {
+      if (!supabase) {
+        setLoading(false)
+        return
+      }
+
+      const { data, error: queryError } = await supabase
+        .from('activity_sessions')
+        .select('id, activity_type, started_at, ended_at, status, duration_seconds, paused_seconds, activity_proofs(storage_path)')
+        .eq('user_id', userId)
+        .order('started_at', { ascending: false })
+        .limit(50)
+
+      if (!mounted) return
+      if (queryError) setError('Não foi possível carregar seu histórico.')
+      else setActivities((data ?? []) as typeof activities)
+      setLoading(false)
+    }
+
+    void load()
+    return () => { mounted = false }
+  }, [userId])
+
+  const statusLabel: Record<string, string> = {
+    active: 'Em andamento',
+    pending_validation: 'Aguardando validação',
+    validated: 'Validada',
+    completed: 'Concluída',
+    rejected: 'Rejeitada',
+    cancelled: 'Cancelada',
+  }
+
+  return (
+    <>
+      <section className="page-head">
+        <span className="eyebrow">SEU HISTÓRICO</span>
+        <h1>Minhas atividades</h1>
+        <p>Veja seus treinos registrados, o status da validação e os comprovantes enviados.</p>
+      </section>
+
+      {error && <div className="form-error">{error}</div>}
+
+      <section className="admin-review">
+        <SectionHeading title="Atividades recentes" />
+        <div className="admin-review-list">
+          {loading ? <p className="admin-empty">Carregando histórico...</p>
+            : activities.length === 0 ? <p className="admin-empty">Nenhuma atividade registrada ainda.</p>
+            : activities.map(activity => {
+              const proof = activity.activity_proofs?.find(item => item.storage_path)
+              return (
+                <div className="admin-review-row" key={activity.id}>
+                  <div>
+                    <strong>{activity.activity_type}</strong>
+                    <span>
+                      {new Date(activity.started_at).toLocaleString('pt-BR')}
+                      {activity.duration_seconds !== null ? ` · ${formatDuration(activity.duration_seconds)}` : ''}
+                    </span>
+                    <small>{statusLabel[activity.status] ?? activity.status}</small>
+                  </div>
+                  {proof?.storage_path && (
+                    <ProofLink bucket="activity-proofs" path={proof.storage_path} />
+                  )}
+                </div>
+              )
+            })}
+        </div>
+      </section>
+    </>
+  )
+}
 
 function ProofLink({ bucket, path }: { bucket: string; path: string }) {
   const [url, setUrl] = useState('')
@@ -329,7 +414,202 @@ function NudgeBanner() {
   if (!nudge?.text) return null
   return <div className={`nudge nudge-${nudge.kind} tone-${nudge.tone ?? 'mid'}`}>{nudge.text}</div>
 }
+function DailyStepsCard({ userId }: { userId: string }) {
+  const [steps, setSteps] = useState('')
+  const [proof, setProof] = useState<File | null>(null)
+  const [status, setStatus] = useState<'idle' | 'uploading' | 'pending' | 'validated' | 'rejected'>('idle')
+  const [savedSteps, setSavedSteps] = useState<number | null>(null)
+  const [error, setError] = useState('')
 
+  const loadToday = async () => {
+    if (!supabase) return
+
+    const { data } = await supabase
+      .from('daily_steps')
+      .select('steps, status')
+      .eq('user_id', userId)
+      .eq('step_date', new Date().toISOString().slice(0, 10))
+      .maybeSingle()
+
+    if (!data) {
+      setStatus('idle')
+      setSavedSteps(null)
+      return
+    }
+
+    setSavedSteps(data.steps)
+
+    if (data.status === 'validated') setStatus('validated')
+    else if (data.status === 'rejected') setStatus('rejected')
+    else setStatus('pending')
+  }
+
+  useEffect(() => {
+    loadToday()
+  }, [userId])
+
+  const progress = Math.min(
+    100,
+    Math.round(((savedSteps ?? Number(steps) ?? 0) / 8000) * 100)
+  )
+
+  const submit = async () => {
+    if (!supabase) {
+      setError('Supabase não configurado.')
+      return
+    }
+
+    const value = Number(steps)
+
+    if (!Number.isInteger(value) || value < 0 || value > 100000) {
+      setError('Informe uma quantidade válida de passos.')
+      return
+    }
+
+    if (!proof) {
+      setError('Anexe um comprovante dos seus passos.')
+      return
+    }
+
+    setStatus('uploading')
+    setError('')
+
+    const extension = proof.name.split('.').pop()?.toLowerCase() || 'jpg'
+    const path = `${userId}/steps-${Date.now()}.${extension}`
+
+    const { error: uploadError } = await supabase.storage
+      .from('activity-proofs')
+      .upload(path, proof, {
+        upsert: false,
+        contentType: proof.type || undefined,
+      })
+
+    if (uploadError) {
+      setStatus('idle')
+      setError('Não foi possível enviar o comprovante.')
+      return
+    }
+
+    const { data, error: rpcError } = await supabase.rpc(
+      'submit_daily_steps',
+      {
+        p_step_date: new Date().toISOString().slice(0, 10),
+        p_steps: value,
+        p_storage_path: path,
+      }
+    )
+
+    if (rpcError) {
+      setStatus('idle')
+      setError(rpcError.message)
+      return
+    }
+
+    setSavedSteps(Number(data?.steps ?? value))
+    setStatus('pending')
+    setProof(null)
+    setSteps('')
+  }
+
+  return (
+    <section className="daily-steps-card">
+      <div className="daily-steps-head">
+        <div>
+          <span className="eyebrow">PASSOS DE HOJE</span>
+          <h2>{(savedSteps ?? 0).toLocaleString('pt-BR')}</h2>
+          <p>Meta de 8.000 passos</p>
+        </div>
+
+        <div className="daily-steps-icon">👟</div>
+      </div>
+
+      <div className="daily-steps-progress">
+        <div
+          className="daily-steps-progress-fill"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+
+      <div className="daily-steps-meta">
+        <span>{progress}% da meta</span>
+        <strong>
+          {Math.max(0, 8000 - (savedSteps ?? 0)).toLocaleString('pt-BR')} restantes
+        </strong>
+      </div>
+
+      {status === 'validated' && (
+        <div className="steps-status success">
+          ✓ Passos validados · +10 pts de consistência
+        </div>
+      )}
+
+      {status === 'pending' && (
+        <div className="steps-status pending">
+          ⏳ Comprovante enviado. Aguardando validação.
+        </div>
+      )}
+
+      {status === 'rejected' && (
+        <div className="steps-status rejected">
+          Comprovante recusado. Você pode enviar novamente.
+        </div>
+      )}
+
+      {(status === 'idle' || status === 'rejected') && (
+        <div className="daily-steps-form">
+          <label>
+            Quantos passos você fez?
+            <input
+              type="number"
+              min="0"
+              max="100000"
+              value={steps}
+              onChange={event => setSteps(event.target.value)}
+              placeholder="Ex.: 8.432"
+            />
+          </label>
+
+          <label>
+            Comprovante
+            <input
+              type="file"
+              accept="image/*,.pdf"
+              onChange={event => setProof(event.target.files?.[0] ?? null)}
+            />
+          </label>
+
+          {proof && (
+            <p className="form-note">
+              Arquivo: {proof.name}
+            </p>
+          )}
+
+          {error && (
+            <div className="form-error">
+              {error}
+            </div>
+          )}
+
+          <button
+            className="primary-button"
+            disabled={status === 'uploading'}
+            onClick={submit}
+          >
+            {status === 'uploading'
+              ? 'Enviando...'
+              : 'Registrar meus passos'}
+          </button>
+        </div>
+      )}
+
+      {status === 'pending' && (
+        <p className="form-note">
+          Os passos só entram na pontuação depois da validação.
+        </p>
+      )}
+    </section>
+  )
+}
 function HomePage({ userId, onNavigate, onRegister, done }: { userId: string; onNavigate: (page: Page) => void; onRegister: () => void; done: boolean }) {
   const [score, setScore] = useState({ points: 0, consistency: 0, evolution: 0, volume: 0, position: 0, total: 0, completedDays: 0 })
   const [seasonName, setSeasonName] = useState('')
@@ -362,12 +642,10 @@ function ActivitySessionForm({ season, activeSession, completedSession, onStarte
   const [pauseStartedAt, setPauseStartedAt] = useState<string | null>(null)
   const [proofFile, setProofFile] = useState<File | null>(null)
   const [proofPreview, setProofPreview] = useState('')
-  const [steps, setSteps] = useState('')
   useEffect(() => { if (!activeSession) return; const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer) }, [activeSession])
   useEffect(() => { if (!supabase || !activeSession) return; supabase.from('activity_pauses').select('pause_started_at').eq('activity_session_id', activeSession.id).is('pause_ended_at', null).maybeSingle().then(({ data }) => { setPaused(Boolean(data)); setPauseStartedAt(data?.pause_started_at ?? null) }) }, [activeSession])
   const elapsed = activeSession ? Math.max(0, Math.floor((now - Date.parse(activeSession.started_at)) / 1000) - (activeSession.paused_seconds ?? 0) - (paused && pauseStartedAt ? Math.floor((now - Date.parse(pauseStartedAt)) / 1000) : 0)) : completedSession?.duration_seconds ?? 0
-  const stepsNumber = steps.trim() === '' ? null : Number(steps)
-  const reachedGoal = elapsed >= 30 * 60 || (stepsNumber !== null && stepsNumber >= 8000)
+  const reachedGoal = elapsed >= 30 * 60
   const start = async () => {
     if (!supabase) { setError('Configure o Supabase para iniciar uma sessão real.'); return }
     const today = new Date().toISOString().slice(0, 10)
@@ -404,7 +682,7 @@ function ActivitySessionForm({ season, activeSession, completedSession, onStarte
     const { error: rpcError } = await supabase.rpc('cancel_activity_session', { p_session_id: activeSession.id })
     setBusy(false)
     if (rpcError) setError(rpcError.message)
-    else { setPaused(false); setPauseStartedAt(null); setSteps(''); setProofFile(null); setProofPreview(''); onCancelled() }
+    else { setPaused(false); setPauseStartedAt(null); setProofFile(null); setProofPreview(''); onCancelled() }
   }
   const selectProof = (file: File) => {
     if (!['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(file.type) || file.size > 5 * 1024 * 1024) { setError('Envie uma imagem ou PDF de até 5 MB.'); return }
@@ -412,17 +690,16 @@ function ActivitySessionForm({ season, activeSession, completedSession, onStarte
   }
   const submit = async () => {
     if (!supabase || !user || !completedSession || !proofFile) { setError('Anexe um comprovante antes de enviar para validação.'); return }
-    if (stepsNumber !== null && (!Number.isInteger(stepsNumber) || stepsNumber < 0 || stepsNumber > 200000)) { setError('Informe um número de passos válido (0 a 200000).'); return }
     setBusy(true); setError('')
     const path = `${user.id}/${completedSession.id}-${crypto.randomUUID()}-${proofFile.name.replace(/[^a-zA-Z0-9._-]/g, '-')}`
     const upload = await supabase.storage.from('activity-proofs').upload(path, proofFile, { upsert: false, contentType: proofFile.type })
     if (upload.error) { setBusy(false); setError(upload.error.message); return }
-    const { data, error: rpcError } = await supabase.rpc('submit_activity_session_with_proof', { p_session_id: completedSession.id, p_storage_path: path, p_steps: stepsNumber })
+    const { data, error: rpcError } = await supabase.rpc('submit_activity_session_with_proof', { p_session_id: completedSession.id, p_storage_path: path, p_steps: null })
     setBusy(false)
     if (rpcError) setError(rpcError.message)
-    else { setSteps(''); setProofFile(null); setProofPreview(''); onDone(data as ActivitySession) }
+    else { setProofFile(null); setProofPreview(''); onDone(data as ActivitySession) }
   }
-  if (completedSession) return <div className="form-panel activity-session-panel completed-session"><div className="session-heading"><span className="eyebrow">🔥 ATIVIDADE CONCLUÍDA</span></div><h2>{completedSession.activity_type}</h2><div className="session-clock">{formatDuration(elapsed)}</div><p className="session-caption">Início: {new Date(completedSession.started_at).toLocaleString('pt-BR')}<br />Término: {completedSession.ended_at ? new Date(completedSession.ended_at).toLocaleString('pt-BR') : '-'}</p>{reachedGoal ? <div className="goal-hit"><Check size={17} /> Meta diária: 30 min · meta atingida</div> : <div className="session-caption goal-missed">Meta diária: 30 min · ainda não atingida</div>}<label className="upload-proof">Passos <span className="optional">opcional</span><input type="number" min={0} max={200000} step={1} inputMode="numeric" placeholder="ex.: 8500" value={steps} disabled={busy} onChange={event => { setSteps(event.target.value); setError('') }} /></label><p className="submit-hint">Informe os passos se bateu a meta de 8.000 sem chegar a 30 minutos.</p><label className="upload-proof">Comprovante da atividade<input type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" disabled={busy} onChange={event => event.target.files?.[0] && selectProof(event.target.files[0])} /></label>{proofPreview && <img className="proof-preview" src={proofPreview} alt="Pré-visualização do comprovante" />}{proofFile?.type === 'application/pdf' && <p className="form-note">PDF selecionado: {proofFile.name}</p>}<div className="review-actions"><button className="primary-button" disabled={busy || !proofFile} onClick={submit}>{busy ? 'Enviando...' : 'Enviar para validação'} <ArrowUpRight size={16} /></button></div>{error && <p className="form-error session-error">{error}</p>}<p className="form-note"><Lock size={13} /> Depois do envio, horários, duração e comprovante ficam bloqueados.</p></div>
+  if (completedSession) return <div className="form-panel activity-session-panel completed-session"><div className="session-heading"><span className="eyebrow">🔥 ATIVIDADE CONCLUÍDA</span></div><h2>{completedSession.activity_type}</h2><div className="session-clock">{formatDuration(elapsed)}</div><p className="session-caption">Início: {new Date(completedSession.started_at).toLocaleString('pt-BR')}<br />Término: {completedSession.ended_at ? new Date(completedSession.ended_at).toLocaleString('pt-BR') : '-'}</p>{reachedGoal ? <div className="goal-hit"><Check size={17} /> Meta diária: 30 min · meta atingida</div> : <div className="session-caption goal-missed">Meta diária: 30 min · ainda não atingida</div>}<p className="submit-hint">Meta diária: 30 minutos de atividade efetiva. Os passos são registrados separadamente, uma vez por dia.</p><label className="upload-proof">Comprovante da atividade<input type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" disabled={busy} onChange={event => event.target.files?.[0] && selectProof(event.target.files[0])} /></label>{proofPreview && <img className="proof-preview" src={proofPreview} alt="Pré-visualização do comprovante" />}{proofFile?.type === 'application/pdf' && <p className="form-note">PDF selecionado: {proofFile.name}</p>}<div className="review-actions"><button className="primary-button" disabled={busy || !proofFile} onClick={submit}>{busy ? 'Enviando...' : 'Enviar para validação'} <ArrowUpRight size={16} /></button></div>{error && <p className="form-error session-error">{error}</p>}<p className="form-note"><Lock size={13} /> Depois do envio, horários, duração e comprovante ficam bloqueados.</p></div>
   return <div className={`form-panel activity-session-panel ${activeSession ? 'is-active' : ''}`}>{activeSession ? <><div className="session-heading"><span className="live-dot" /><span className="eyebrow">{paused ? '⏸ ATIVIDADE PAUSADA' : '🔥 ATIVIDADE EM ANDAMENTO'}</span></div><h2>{activeSession.activity_type}</h2><div className="session-clock">{formatDuration(elapsed)}</div><p className="session-caption">{paused ? 'tempo pausado não entra na duração efetiva' : 'tempo realizado · registrado pelo servidor'}</p>{reachedGoal && <div className="goal-hit"><Flame size={17} /> META BATIDA! Você pode continuar.</div>}<div className="session-goal"><div><span className="eyebrow">META DO DIA</span><strong>{Math.min(100, Math.round((elapsed / 1800) * 100))}%</strong></div><div className="progress-line"><span style={{ width: `${Math.min(100, (elapsed / 1800) * 100)}%` }} /></div><small>{formatDuration(Math.min(elapsed, 1800))} de 00:30:00</small></div><div className="review-actions"><button className="text-button" disabled={busy} onClick={togglePause}>{paused ? 'Continuar' : 'Pausar'}</button><button className="primary-button finish-button" disabled={busy} onClick={finish}>{busy ? 'Finalizando...' : 'Finalizar'} <Check size={17} /></button></div><button className="text-button discard-button" disabled={busy} onClick={cancel}>Descartar atividade</button></> : <><label>Atividade<select value={type} onChange={e => setType(e.target.value as ActivityType)}>{Object.keys(metValues).map(item => <option key={item}>{item}</option>)}</select></label><div className="estimate"><span className="estimate-icon"><Play size={21} /></span><div><span className="eyebrow">CHECK-IN COM HORÁRIO REAL</span><strong>Pronto para começar</strong><p>O servidor registra o início e calcula a duração no final.</p></div></div><button className="primary-button full" disabled={busy} onClick={start}>{busy ? 'Iniciando...' : 'Iniciar atividade'} <Play size={17} /></button></>} {error && <p className="form-error session-error">{error}</p>}<p className="form-note"><Lock size={13} /> A pontuação só é criada após validação.</p></div>
 }
 
@@ -758,7 +1035,7 @@ function DuelsPage({ userId, onAction }: { userId: string; onAction: (message: s
 
 type SeasonOption = { id: string; name: string; status: string; rules: Record<string, number> | null }
 const ruleLabels: Array<[string, string]> = [
-  ['daily_minutes', 'Minutos por dia'], ['daily_steps', 'Passos por dia'],
+  ['daily_minutes', 'Minutos por dia'], ['daily_steps', 'Passos diários'],
   ['consistency_per_day', 'Pontos por dia'], ['weekly_consistency_cap', 'Teto de consistência'],
   ['bonus_days', 'Dias para bônus'], ['bonus_points', 'Pontos de bônus'],
   ['evolution_cap', 'Teto de evolução'], ['volume_cap', 'Teto de volume'],
@@ -842,7 +1119,6 @@ type BaselineInfo = {
 function BaselineCard() {
   const [info, setInfo] = useState<BaselineInfo | null>(null)
   const [minutes, setMinutes] = useState('')
-  const [steps, setSteps] = useState('')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
@@ -993,7 +1269,7 @@ function AdminBaselines() {
               {!row.frozen_at && <button className="text-button" disabled={busy} onClick={() => {
                 const minutes = window.prompt(`Minutos por dia de ${row.profiles?.full_name ?? 'participante'}:`, String(row.average_active_minutes))
                 if (minutes === null) return
-                const steps = window.prompt('Passos por dia:', String(row.average_steps))
+                const steps = window.prompt('Passos diários:', String(row.average_steps))
                 if (steps === null) return
                 saveFor(row.user_id, { minutes, steps })
               }}>Corrigir</button>}
@@ -1348,11 +1624,11 @@ function RulesPage() {
 
     <RuleBlock title="Temporada" text={`Esta temporada tem ${weeks} semana(s), de ${season ? new Date(`${season.start_date}T12:00:00`).toLocaleDateString('pt-BR') : '—'} a ${season ? new Date(`${season.end_date}T12:00:00`).toLocaleDateString('pt-BR') : '—'}. Cada semana tem 6 dias que pontuam; o sétimo é descanso e não conta.`} />
 
-    <RuleBlock title="Ponto de partida" text="Na inscrição você informa sua média de minutos de atividade e de passos por dia. É contra esse número que sua evolução é medida, e ele é congelado pela organização antes da temporada começar. Nada aqui envolve peso, medidas ou aparência." />
+    <RuleBlock title="Ponto de partida" text="Na inscrição você informa sua média de minutos de atividade por dia. É contra esse número que sua evolução é medida, e ele é congelado pela organização antes da temporada começar. Os passos não fazem parte do baseline: são registrados separadamente, uma vez por dia." />
 
     <RuleBlock title="Meta diária" text={`Complete ${rule('daily_minutes', 30)} minutos de atividade ou alcance ${rule('daily_steps', 8000).toLocaleString('pt-BR')} passos. A atividade precisa de comprovante e só conta depois de validada pela organização.`} />
 
-    <RuleBlock title="Como a pontuação é calculada" text={`Consistência: ${rule('consistency_per_day', 10)} pontos por dia concluído, até ${rule('weekly_consistency_cap', 60)} por semana, mais ${rule('bonus_points', 15)} pontos ao fechar ${rule('bonus_days', 5)} dias ou mais. Evolução: 1 ponto a cada 2% de melhora sobre seu ponto de partida, até ${rule('evolution_cap', 25)}. Volume: 1 ponto a cada ${rule('met_min_per_point', 40)} MET-min, até ${rule('volume_cap', 20)}. O teto é 120 pontos por semana.`} />
+    <RuleBlock title="Como a pontuação é calculada" text={`Consistência: ${rule('consistency_per_day', 10)} pontos por dia concluído, até ${rule('weekly_consistency_cap', 60)} por semana, mais ${rule('bonus_points', 15)} pontos ao fechar ${rule('bonus_days', 5)} dias ou mais. Um dia pode ser concluído por 30 minutos de atividade efetiva ou ${rule('daily_steps', 8000).toLocaleString('pt-BR')} passos validados; os passos são lançados uma única vez por dia. Evolução: 1 ponto a cada 2% de melhora sobre seu ponto de partida, usando no mínimo 10 minutos como baseline matemático, até ${rule('evolution_cap', 25)}. Volume: 1 ponto a cada ${rule('met_min_per_point', 40)} MET-min, até ${rule('volume_cap', 20)}. O teto é 120 pontos por semana.`} />
 
     <RuleBlock title="Duelos" text={`Você pode desafiar uma pessoa por semana, nos quatro primeiros dias. Ela tem 24 horas para aceitar ou recusar, sem penalidade se recusar. Vence quem concluir mais dias na semana; empate desempata por consistência e depois por volume. O vencedor ganha ${rule('duel_points', 10)} pontos que somam por fora do teto semanal. Dá para desistir a qualquer momento, e aí o adversário vence na hora. No máximo dois duelos com a mesma pessoa por temporada.`} />
 
@@ -1369,7 +1645,8 @@ const faqSections: Array<{ title: string; items: Array<{ q: string; a: string }>
     title: 'Começando',
     items: [
       { q: 'Como entro na temporada?', a: 'Toque no nome da temporada no topo da tela. Você informa seu ponto de partida, faz o PIX no valor indicado, anexa o comprovante e espera a organização aprovar. Enquanto não for aprovado, você não consegue registrar atividade.' },
-      { q: 'O que é o ponto de partida?', a: 'É a sua média de minutos de atividade e de passos por dia antes da temporada começar. Sua evolução é medida contra esse número, ou seja, você compete contra a sua própria versão anterior. Ele é congelado pela organização e não pode ser alterado depois.' },
+      { q: 'O que é o ponto de partida?', a: 'É a sua média de minutos de atividade por dia antes da temporada começar. Sua evolução é medida contra esse número, ou seja, você compete contra a sua própria versão anterior. O baseline é congelado pela organização e não pode ser alterado depois. Os passos são registrados separadamente.' },
+      { q: 'Os passos contam para a classificação?', a: 'Sim. Você pode concluir um dia com 30 minutos de atividade efetiva ou com 8.000 passos validados. Os passos são informados uma única vez por dia, com comprovante, e também podem participar de desafios específicos.' },
       { q: 'Preciso informar peso ou medidas?', a: 'Não. Peso, altura, IMC, gordura corporal, medidas e fotos de corpo não são pedidos, não são guardados e não entram em nenhum cálculo.' },
       { q: 'Meu PIX foi recusado. E agora?', a: 'Abra a tela da temporada, confira o valor e a chave, refaça o pagamento e anexe o novo comprovante. A inscrição volta para análise automaticamente.' },
     ],
@@ -1545,7 +1822,7 @@ function PrivacyPage() {
   return <>
     <PageTitle eyebrow="PRIVACIDADE" title="O que guardamos, e por quê." detail="Escrito em português claro, sem letra miúda." />
 
-    <RuleBlock title="O que é coletado" text="Seu nome, e-mail e celular, informados no cadastro. Sua média de minutos e passos declarada na inscrição. As atividades que você registra, com horário de início e fim, duração, tipo e passos. Os comprovantes que você anexa. Sua pontuação, duelos, coringas e grupos." />
+    <RuleBlock title="O que é coletado" text="Seu nome, e-mail e celular, informados no cadastro. Sua média de minutos de atividade declarada na inscrição. Os passos diários que você registra. As atividades que você registra, com horário de início e fim, duração e tipo. Os comprovantes que você anexa. Sua pontuação, duelos, coringas e grupos." />
 
     <RuleBlock title="O que não é coletado" text="Peso, altura, IMC, percentual de gordura, medidas corporais, fotos de corpo, dados de saúde e localização. Nada disso é pedido, guardado ou usado em qualquer cálculo." />
 
