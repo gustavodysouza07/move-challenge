@@ -41,3 +41,4 @@
 .result-row strong{font-size:12px}
 .result-row span{font-size:10px;color:var(--muted)}
 .result-note{display:block;margin-top:14px;font-size:10px;line-height:1.5;color:#77718d}
+.menu-button{display:grid}
