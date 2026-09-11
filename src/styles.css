@@ -15,3 +15,29 @@
 .status-pill.status-pending_validation{background:#3d3020;color:#ffe6a2}
 .status-pill.status-rejected{background:#3c202d;color:#ffb5be}
 .status-pill.status-cancelled{background:#241f3d;color:#77718d}
+.duel-board{border-top:1px solid var(--line);padding:18px 16px}
+.duel-score{display:flex;align-items:center;justify-content:center;gap:26px}
+.duel-score div{display:flex;flex-direction:column;align-items:center;gap:4px}
+.duel-score strong{font:600 38px 'Space Grotesk';color:#f3f1ff}
+.duel-versus{font:600 20px 'Space Grotesk';color:#77718d}
+.duel-lead{text-align:center;font-size:12px;color:var(--cyan);margin:12px 0 18px}
+.duel-track{display:flex;align-items:center;gap:6px;margin-bottom:8px}
+.duel-track-name{width:74px;font-size:10px;color:var(--muted);text-transform:lowercase}
+.duel-track i{flex:1;height:30px;display:grid;place-items:center;border-radius:8px;background:#1d1a30;border:1px solid #2b2745;color:#5f5980;font-style:normal;font-size:10px;font-weight:700}
+.duel-track i.done{background:#173834;border-color:#2f7a6e;color:#a9f5e8}
+.duel-tiebreak{display:block;margin-top:12px;font-size:10px;color:#77718d;text-align:center}
+.result-head{width:100%;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:16px;background:none;text-align:left;border-bottom:1px solid #29253d}
+.result-head div{display:flex;flex-direction:column;gap:5px}
+.result-head strong{font-size:13px;color:#f1eff9}
+.result-head span{font-size:10px;color:var(--muted)}
+.result-arrow{color:#77718d;transition:transform .2s}
+.result-arrow.open{transform:rotate(90deg);color:var(--cyan)}
+.result-body{padding:6px 16px 18px;border-bottom:1px solid #29253d}
+.result-block{margin-top:14px}
+.result-block .eyebrow{display:block;margin-bottom:8px}
+.result-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid #211e33}
+.result-row:last-child{border-bottom:0}
+.result-row div{display:flex;flex-direction:column;gap:4px}
+.result-row strong{font-size:12px}
+.result-row span{font-size:10px;color:var(--muted)}
+.result-note{display:block;margin-top:14px;font-size:10px;line-height:1.5;color:#77718d}

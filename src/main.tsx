@@ -24,7 +24,7 @@ import { AuthProvider, useAuth, type Profile } from './lib/auth'
 import { supabase } from './lib/supabase'
 import './styles.css'
 
-type Page = 'home' | 'ranking' | 'register' | 'activities' | 'challenges' | 'profile' | 'rules' | 'admin' | 'enrollment'
+type Page = 'home' | 'ranking' | 'register' | 'activities' | 'challenges' | 'groups' | 'profile' | 'rules' | 'admin' | 'enrollment'
 type ActivityType = 'Caminhada leve' | 'Caminhada rápida / inclinação' | 'Musculação moderada' | 'Musculação pesada' | 'Bike / spinning' | 'Natação' | 'Corrida' | 'Funcional / HIIT' | 'Yoga / alongamento'
 type ActivitySession = { id: string; activity_type: ActivityType; started_at: string; ended_at: string | null; status: 'active' | 'pending_validation' | 'validated' | 'rejected' | 'completed' | 'cancelled'; duration_seconds: number | null; paused_seconds?: number }
 type CurrentSeason = { id: string; name: string; start_date: string; end_date: string; status: 'registration' | 'active' }
@@ -96,9 +96,9 @@ function App() {
       <button className="season-pill" onClick={() => go('enrollment')}><span className="live-dot" /> {currentSeason?.name ?? 'Nenhuma temporada disponível'} <ChevronRight size={13} /></button>
       <div className="top-actions"><button className="icon-button" onClick={() => notify('Você está em dia!')} aria-label="Notificações"><Bell size={19} /><span className="notification-dot" /></button><button className="avatar-button" onClick={() => go('profile')}>{profile?.avatar_emoji || '🪩'}</button><button className="icon-button menu-button" onClick={() => setMenuOpen(!menuOpen)} aria-label="Abrir menu"><Menu size={20} /></button></div>
     </header>
-    {menuOpen && <div className="quick-menu"><button onClick={() => go('rules')}><BookOpen size={17} /> Como pontua</button>{profile?.role === 'admin' && <button onClick={() => go('admin')}><ShieldCheck size={17} /> Admin</button>}<button onClick={() => notify('Tudo certo: seus dados estão protegidos.')}><ShieldCheck size={17} /> Privacidade</button><button onClick={() => signOut()}><Lock size={17} /> Sair</button></div>}
+    {menuOpen && <div className="quick-menu"><button onClick={() => go('rules')}><BookOpen size={17} /> Como pontua</button><button onClick={() => go('groups')}><Users size={17} /> Meus grupos</button>{profile?.role === 'admin' && <button onClick={() => go('admin')}><ShieldCheck size={17} /> Admin</button>}<button onClick={() => notify('Tudo certo: seus dados estão protegidos.')}><ShieldCheck size={17} /> Privacidade</button><button onClick={() => signOut()}><Lock size={17} /> Sair</button></div>}
 
-    <main className="content">{page === 'home' && <HomePage userId={user.id} onNavigate={go} onRegister={() => setShowRegister(true)} done={activityDone} />}{page === 'ranking' && <RankingPage userId={user.id} />}{page === 'register' && <RegisterPage onCancelled={() => { setActiveSession(null); setCompletedSession(null) }} activeSession={activeSession} completedSession={completedSession} onStarted={setActiveSession} onCompleted={session => { setActiveSession(null); setCompletedSession(session) }} onDone={(session) => { setCompletedSession(null); setActivityDone(true); notify(`Atividade de ${formatDuration(session.duration_seconds ?? 0)} enviada para validação.`); go('home') }} />}{page === 'activities' && <ActivityHistoryPage userId={user.id} />}{page === 'challenges' && <DuelsPage userId={user.id} onAction={notify} />}{page === 'profile' && <ProfilePage profile={profile} onNavigate={go} onAction={notify} />}{page === 'rules' && <RulesPage />}{page === 'enrollment' && <EnrollmentPage />}{page === 'admin' && (profile?.role === 'admin' ? <AdminWorkspace /> : <AccessState title="Área restrita" detail="Apenas administradores podem acessar este espaço." onAction={() => go('home')} action="Voltar" />)}</main>
+    <main className="content">{page === 'home' && <HomePage userId={user.id} onNavigate={go} onRegister={() => setShowRegister(true)} done={activityDone} />}{page === 'ranking' && <RankingPage userId={user.id} />}{page === 'register' && <RegisterPage onCancelled={() => { setActiveSession(null); setCompletedSession(null) }} activeSession={activeSession} completedSession={completedSession} onStarted={setActiveSession} onCompleted={session => { setActiveSession(null); setCompletedSession(session) }} onDone={(session) => { setCompletedSession(null); setActivityDone(true); notify(`Atividade de ${formatDuration(session.duration_seconds ?? 0)} enviada para validação.`); go('home') }} />}{page === 'activities' && <ActivityHistoryPage userId={user.id} />}{page === 'challenges' && <DuelsPage userId={user.id} onAction={notify} />}{page === 'groups' && <GroupsPage userId={user.id} onAction={notify} />}{page === 'profile' && <ProfilePage profile={profile} onNavigate={go} onAction={notify} />}{page === 'rules' && <RulesPage />}{page === 'enrollment' && <EnrollmentPage />}{page === 'admin' && (profile?.role === 'admin' ? <AdminWorkspace /> : <AccessState title="Área restrita" detail="Apenas administradores podem acessar este espaço." onAction={() => go('home')} action="Voltar" />)}</main>
 
     <nav className="bottom-nav">{navItems.map(({ id, label, icon: Icon }) => <button key={id} className={page === id ? 'active' : ''} onClick={() => id === 'register' ? setShowRegister(true) : go(id)}><span className="nav-icon"><Icon size={20} strokeWidth={page === id ? 2.5 : 1.8} />{id === 'register' && <span className="nav-plus">+</span>}</span><span>{label}</span></button>)}</nav>
     {(showRegister || activeSession || completedSession) && <RegisterModal onCancelled={() => { setActiveSession(null); setCompletedSession(null); setShowRegister(false) }} season={currentSeason} activeSession={activeSession} completedSession={completedSession} onClose={() => { setShowRegister(false); setCompletedSession(null) }} onStarted={setActiveSession} onCompleted={session => { setActiveSession(null); setCompletedSession(session) }} onDone={(session) => { setActiveSession(null); setCompletedSession(null); setActivityDone(true); setShowRegister(false); notify(`Atividade de ${formatDuration(session.duration_seconds ?? 0)} enviada para validação.`) }} />}
@@ -162,9 +162,9 @@ function ProofLink({ bucket, path }: { bucket: string; path: string }) {
 
 function AdminWorkspace() {
   const { user } = useAuth()
-  const [tab, setTab] = useState<'dashboard' | 'seasons' | 'participants' | 'payments' | 'activities' | 'ranking' | 'settings'>('dashboard')
-  const tabs = [['dashboard', 'Dashboard'], ['seasons', 'Temporadas'], ['participants', 'Participantes'], ['payments', 'Pagamentos PIX'], ['activities', 'Atividades pendentes'], ['ranking', 'Ranking'], ['settings', 'Configurações']] as const
-  return <><nav className="admin-tabs">{tabs.map(([id, label]) => <button className={tab === id ? 'active' : ''} key={id} onClick={() => setTab(id)}>{label}</button>)}</nav>{tab === 'dashboard' && <AdminPage />}{tab === 'seasons' && <AdminSeasons />}{tab === 'participants' && <AdminParticipants />}{tab === 'payments' && <AdminPayments />}{tab === 'activities' && <AdminActivities />}{tab === 'ranking' && user && <RankingPage userId={user.id} />}{tab === 'settings' && <AdminSettings />}</>
+  const [tab, setTab] = useState<'dashboard' | 'seasons' | 'participants' | 'payments' | 'activities' | 'ranking' | 'payout' | 'settings'>('dashboard')
+  const tabs = [['dashboard', 'Dashboard'], ['seasons', 'Temporadas'], ['participants', 'Participantes'], ['payments', 'Pagamentos PIX'], ['activities', 'Atividades pendentes'], ['ranking', 'Ranking'], ['payout', 'Premiação'], ['settings', 'Configurações']] as const
+  return <><nav className="admin-tabs">{tabs.map(([id, label]) => <button className={tab === id ? 'active' : ''} key={id} onClick={() => setTab(id)}>{label}</button>)}</nav>{tab === 'dashboard' && <AdminPage />}{tab === 'seasons' && <AdminSeasons />}{tab === 'participants' && <AdminParticipants />}{tab === 'payments' && <AdminPayments />}{tab === 'activities' && <AdminActivities />}{tab === 'ranking' && user && <RankingPage userId={user.id} />}{tab === 'payout' && <AdminPayout />}{tab === 'settings' && <AdminSettings />}</>
 }
 
 function AdminSeasons() {
@@ -173,23 +173,34 @@ function AdminSeasons() {
   const [message, setMessage] = useState(''); const [error, setError] = useState('')
   const load = async () => { if (!supabase) return; const { data } = await supabase.from('seasons').select('id, name, description, start_date, end_date, status, entry_fee, pix_key').order('start_date', { ascending: false }); setSeasons((data ?? []) as typeof seasons) }
   useEffect(() => { load() }, [])
-  const save = async (event: React.FormEvent) => { event.preventDefault(); if (!supabase) return; setMessage(''); setError(''); const { error: saveError } = await supabase.rpc('admin_upsert_season', { p_season_id: form.id || null, p_name: form.name, p_description: form.description || null, p_start_date: form.start_date, p_end_date: form.end_date, p_status: form.status, p_entry_fee: Number(form.entry_fee), p_pix_key: form.pix_key || null }); if (saveError) setError(saveError.message); else { setMessage('Temporada salva.'); setForm({ id: '', name: '', description: '', start_date: '', end_date: '', status: 'draft', entry_fee: '0', pix_key: '' }); load() } }
+  const save = async (event: React.FormEvent) => { event.preventDefault(); if (!supabase) return; setMessage(''); setError(''); const { data: saved, error: saveError } = await supabase.rpc('admin_upsert_season', { p_season_id: form.id || null, p_name: form.name, p_description: form.description || null, p_start_date: form.start_date, p_end_date: form.end_date, p_status: form.status, p_entry_fee: Number(form.entry_fee), p_pix_key: form.pix_key || null }); if (saveError) setError(saveError.message); else { setMessage(`Temporada salva: ${(saved as { name: string; status: string }).name} · ${(saved as { name: string; status: string }).status}.`); setForm({ id: '', name: '', description: '', start_date: '', end_date: '', status: 'draft', entry_fee: '0', pix_key: '' }); load() } }
   return <><PageTitle eyebrow="TEMPORADAS" title="Temporadas" detail="Crie e edite temporadas por operação administrativa server-side." /><form className="form-panel admin-season-form" onSubmit={save}><div className="form-grid"><label>Nome<input required value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} /></label><label>Status<select value={form.status} onChange={event => setForm({ ...form, status: event.target.value })}><option>draft</option><option>registration</option><option>active</option><option>finished</option><option>cancelled</option></select></label><label>Início<input required type="date" value={form.start_date} onChange={event => setForm({ ...form, start_date: event.target.value })} /></label><label>Fim<input required type="date" value={form.end_date} onChange={event => setForm({ ...form, end_date: event.target.value })} /></label><label>Valor<input required min="0" step="0.01" type="number" value={form.entry_fee} onChange={event => setForm({ ...form, entry_fee: event.target.value })} /></label><label>Chave PIX<input value={form.pix_key} onChange={event => setForm({ ...form, pix_key: event.target.value })} /></label></div><label>Descrição<textarea value={form.description} onChange={event => setForm({ ...form, description: event.target.value })} /></label><button className="primary-button" type="submit">{form.id ? 'Salvar alterações' : 'Criar temporada'} <Check size={16} /></button>{message && <div className="form-success">{message}</div>}{error && <div className="form-error">{error}</div>}</form><div className="admin-review-list">{seasons.map(season => <div className="admin-review-row" key={season.id}><div><strong>{season.name}</strong><span>{season.start_date} a {season.end_date} · {season.status} · R$ {Number(season.entry_fee).toFixed(2).replace('.', ',')}</span></div><button className="text-button" onClick={() => setForm({ id: season.id, name: season.name, description: season.description ?? '', start_date: season.start_date, end_date: season.end_date, status: season.status, entry_fee: String(season.entry_fee), pix_key: season.pix_key ?? '' })}>Editar</button></div>)}</div></>
 }
 
 function AdminParticipants() {
-  const [rows, setRows] = useState<Array<{ id: string; user_id: string; status: string; joined_at: string; profiles: { full_name: string; avatar_emoji: string | null } | null; seasons: { name: string } | null; payments: { payment_status: string }[] }>>([])
+  const [rows, setRows] = useState<Array<{ id: string; user_id: string; status: string; joined_at: string; season_id: string; profiles: { full_name: string; avatar_emoji: string | null } | null; seasons: { name: string } | null }>>([])
   const [error, setError] = useState('')
-  const load = async () => { if (!supabase) return; const { data } = await supabase.from('season_participants').select('id, user_id, status, joined_at, profiles(full_name, avatar_emoji), seasons(name), payments(payment_status)').order('joined_at', { ascending: false }); setRows((data ?? []) as unknown as typeof rows) }
+  const [payments, setPayments] = useState<Record<string, string>>({})
+  const load = async () => {
+    if (!supabase) return
+    const [participantResult, paymentResult] = await Promise.all([
+      supabase.from('season_participants').select('id, user_id, season_id, status, joined_at, profiles!season_participants_user_id_fkey(full_name, avatar_emoji), seasons(name)').order('joined_at', { ascending: false }),
+      supabase.from('payments').select('user_id, season_id, payment_status'),
+    ])
+    if (participantResult.error) { setError(participantResult.error.message); return }
+    setError('')
+    setPayments(Object.fromEntries(((paymentResult.data ?? []) as Array<{ user_id: string; season_id: string; payment_status: string }>).map(row => [`${row.user_id}:${row.season_id}`, row.payment_status])))
+    setRows((participantResult.data ?? []) as unknown as typeof rows)
+  }
   useEffect(() => { load() }, [])
   const changeStatus = async (userId: string, status: 'active' | 'blocked' | 'pending') => { if (!supabase) return; const { error: rpcError } = await supabase.rpc('admin_set_profile_status', { p_user_id: userId, p_status: status }); if (rpcError) setError(rpcError.message); else load() }
-  return <><PageTitle eyebrow="PARTICIPANTES" title="Participantes" detail="Status de inscrição e pagamento vindos do Supabase." />{error && <div className="form-error">{error}</div>}<div className="admin-review-list">{rows.length === 0 ? <p className="admin-empty">Nenhum participante encontrado.</p> : rows.map(row => <div className="admin-review-row" key={row.id}><div><strong>{row.profiles?.avatar_emoji ?? '·'} {row.profiles?.full_name ?? 'Participante'}</strong><span>{row.seasons?.name ?? 'Temporada'} · inscrição {new Date(row.joined_at).toLocaleDateString('pt-BR')} · pagamento {row.payments?.[0]?.payment_status ?? 'pendente'}</span><small>Status: {row.status}</small></div><div className="review-actions"><button className="text-button" onClick={() => changeStatus(row.user_id, 'active')}>Ativar</button><button className="text-button reject" onClick={() => changeStatus(row.user_id, 'blocked')}>Bloquear</button></div></div>)}</div></>
+  return <><PageTitle eyebrow="PARTICIPANTES" title="Participantes" detail="Status de inscrição e pagamento vindos do Supabase." />{error && <div className="form-error">{error}</div>}<div className="admin-review-list">{rows.length === 0 ? <p className="admin-empty">Nenhum participante encontrado.</p> : rows.map(row => <div className="admin-review-row" key={row.id}><div><strong>{row.profiles?.avatar_emoji ?? '·'} {row.profiles?.full_name ?? 'Participante'}</strong><span>{row.seasons?.name ?? 'Temporada'} · inscrição {new Date(row.joined_at).toLocaleDateString('pt-BR')} · pagamento {payments[`${row.user_id}:${row.season_id}`] ?? 'pendente'}</span><small>Status: {row.status}</small></div><div className="review-actions"><button className="text-button" onClick={() => changeStatus(row.user_id, 'active')}>Ativar</button><button className="text-button reject" onClick={() => changeStatus(row.user_id, 'blocked')}>Bloquear</button></div></div>)}</div></>
 }
 
 function AdminPayments() {
   const [rows, setRows] = useState<AdminPayment[]>([])
   const [error, setError] = useState('')
-  const load = async () => { if (!supabase) return; const { data } = await supabase.from('payments').select('id, amount, payment_status, created_at, proof_url, profiles(full_name, email), seasons(name)').in('payment_status', ['pending', 'submitted']).order('created_at', { ascending: true }); setRows((data ?? []) as unknown as AdminPayment[]) }
+  const load = async () => { if (!supabase) return; const { data, error: loadError } = await supabase.from('payments').select('id, amount, payment_status, created_at, proof_url, profiles!payments_user_id_fkey(full_name, email), seasons(name)').in('payment_status', ['pending', 'submitted']).order('created_at', { ascending: true }); if (loadError) setError(loadError.message); else { setError(''); setRows((data ?? []) as unknown as AdminPayment[]) } }
   useEffect(() => { load() }, [])
   const review = async (id: string, approved: boolean) => { if (!supabase) return; const reason = approved ? null : window.prompt('Informe o motivo da rejeição:'); if (!approved && !reason?.trim()) return; const result = approved ? await supabase.rpc('confirm_payment', { p_payment_id: id }) : await supabase.rpc('reject_payment', { p_payment_id: id, p_reason: reason }); if (result.error) setError(result.error.message); else load() }
   return <><PageTitle eyebrow="PAGAMENTOS PIX" title="Pagamentos PIX" detail="Aprovação manual com atualização server-side da participação." />{error && <div className="form-error">{error}</div>}<div className="admin-review-list">{rows.length === 0 ? <p className="admin-empty">Nenhum pagamento pendente.</p> : rows.map(row => <div className="admin-review-row" key={row.id}><div><strong>{row.profiles?.full_name ?? 'Participante'}</strong><span>{row.seasons?.name ?? 'Temporada'} · R$ {Number(row.amount).toFixed(2).replace('.', ',')} · {row.payment_status}</span><small>{new Date(row.created_at).toLocaleString('pt-BR')}</small></div><div className="review-actions">{row.proof_url && <ProofLink bucket="payment-proofs" path={row.proof_url} />}<button className="text-button" onClick={() => review(row.id, true)}>Aprovar</button><button className="text-button reject" onClick={() => review(row.id, false)}>Rejeitar</button></div></div>)}</div></>
@@ -217,10 +228,12 @@ function AdminPage() {
       supabase.from('season_participants').select('id', { count: 'exact', head: true }),
       supabase.from('season_participants').select('id', { count: 'exact', head: true }).in('status', ['pending_payment', 'pending_approval']),
       supabase.from('season_participants').select('id', { count: 'exact', head: true }).eq('status', 'active'),
-      supabase.from('payments').select('id, amount, payment_status, created_at, proof_url, profiles(full_name, email), seasons(name)').in('payment_status', ['pending', 'submitted']).order('created_at', { ascending: true }),
+      supabase.from('payments').select('id, amount, payment_status, created_at, proof_url, profiles!payments_user_id_fkey(full_name, email), seasons(name)').in('payment_status', ['pending', 'submitted']).order('created_at', { ascending: true }),
       supabase.from('activity_sessions').select('id, activity_type, started_at, ended_at, duration_seconds, status, source, profiles(full_name), activity_proofs(proof_type, storage_path, external_reference)').eq('status', 'pending_validation').order('created_at', { ascending: true }),
     ])
     setStats({ seasons: seasons.count ?? 0, participants: participants.count ?? 0, pending: pending.count ?? 0, active: active.count ?? 0 })
+    const failure = paymentResult.error ?? activityResult.error
+    if (failure) setActionError(failure.message); else setActionError('')
     setPayments((paymentResult.data ?? []) as unknown as AdminPayment[])
     setActivities((activityResult.data ?? []) as unknown as AdminActivity[])
     setLoading(false)
@@ -254,7 +267,7 @@ function HomePage({ userId, onNavigate, onRegister, done }: { userId: string; on
 function Stat({ icon, label, value, accent }: { icon: React.ReactNode; label: string; value: string; accent: string }) { return <div className="stat-card"><span className={`stat-icon ${accent}`}>{icon}</span><span className="stat-label">{label}</span><strong>{value}</strong></div> }
 function MiniChallenge({ icon, tag, title, progress, color, onClick }: { icon: React.ReactNode; tag: string; title: string; progress: string; color: string; onClick: () => void }) { return <button className={`mini-challenge ${color}`} onClick={onClick}><div className="challenge-icon">{icon}</div><span className="eyebrow">{tag}</span><h3>{title}</h3><p>{progress}</p><ChevronRight className="card-arrow" size={18} /></button> }
 
-function RankingPage({ userId }: { userId: string }) { const [rows, setRows] = useState<ScoreRow[]>([]); const [loading, setLoading] = useState(true); useEffect(() => { if (!supabase) { setLoading(false); return }; const load = async () => { const { data: season } = await supabase.from('seasons').select('id, name, start_date').eq('status', 'active').order('start_date', { ascending: false }).limit(1).maybeSingle(); if (!season) { setLoading(false); return }; const { data } = await supabase.from('weekly_scores').select('user_id, consistency_points, evolution_points, volume_points, bonus_points, completed_days, total_points, profiles(full_name)').eq('season_id', season.id); const totals = new Map<string, ScoreRow>(); (data ?? []).forEach(item => { const row = item as unknown as ScoreRow; const existing = totals.get(row.user_id) ?? { user_id: row.user_id, consistency_points: 0, evolution_points: 0, volume_points: 0, bonus_points: 0, completed_days: 0, total_points: 0, profiles: row.profiles }; existing.consistency_points += Number(row.consistency_points); existing.evolution_points += Number(row.evolution_points); existing.volume_points += Number(row.volume_points); existing.bonus_points += Number(row.bonus_points); existing.completed_days += Number(row.completed_days); existing.total_points += Number(row.total_points); totals.set(row.user_id, existing) }); setRows([...totals.values()].sort((a, b) => b.total_points - a.total_points)); setLoading(false) }; load() }, []); const position = rows.findIndex(row => row.user_id === userId) + 1; return <><PageTitle eyebrow="PLACAR DA TEMPORADA" title="Quem está se movendo?" detail="Pontuação oficial calculada e validada pelo Supabase." /><div className="your-position"><div><span className="eyebrow">SUA POSIÇÃO</span><h2>{position ? `#${position}` : '-'} <small>de {rows.length} pessoas</small></h2></div><div className="gap-copy"><strong>{rows[position - 2] ? `${(rows[position - 2].total_points - (rows[position - 1]?.total_points ?? 0)).toLocaleString('pt-BR')} pts` : 'No topo'}</strong><span>{rows[position - 2] ? 'para alcançar a posição acima' : 'continue consistente'}</span></div></div><SectionHeading title="Ranking geral" action="Pontuação total" /><div className="leaderboard">{loading ? <p className="admin-empty">Carregando ranking...</p> : rows.map((person, index) => <div className={`rank-row ${person.user_id === userId ? 'current-user' : ''}`} key={person.user_id}><span className="rank-number">{index + 1}</span><span className="rank-avatar">{person.user_id === userId ? '🪩' : '✦'}</span><div className="rank-person"><strong>{person.profiles?.full_name ?? 'Participante'}</strong><span><Flame size={13} /> {person.completed_days} dias <i /> {person.consistency_points} pts consistência</span></div><strong className="rank-points">{person.total_points.toLocaleString('pt-BR')} <small>pts</small></strong></div>)}</div><div className="score-info"><CircleHelp size={18} /><div><strong>Como funciona o placar?</strong><p>Consistência, evolução e volume vêm de atividades validadas no servidor. Peso, IMC, gordura corporal, medidas e aparência não participam do ranking.</p></div><ChevronRight size={17} /></div></> }
+function RankingPage({ userId }: { userId: string }) { const [rows, setRows] = useState<ScoreRow[]>([]); const [loading, setLoading] = useState(true); useEffect(() => { if (!supabase) { setLoading(false); return }; const load = async () => { const { data: season } = await supabase.from('seasons').select('id, name, start_date').eq('status', 'active').order('start_date', { ascending: false }).limit(1).maybeSingle(); if (!season) { setLoading(false); return }; const { data } = await supabase.from('weekly_scores').select('user_id, consistency_points, evolution_points, volume_points, bonus_points, completed_days, total_points, profiles(full_name)').eq('season_id', season.id); const totals = new Map<string, ScoreRow>(); (data ?? []).forEach(item => { const row = item as unknown as ScoreRow; const existing = totals.get(row.user_id) ?? { user_id: row.user_id, consistency_points: 0, evolution_points: 0, volume_points: 0, bonus_points: 0, completed_days: 0, total_points: 0, profiles: row.profiles }; existing.consistency_points += Number(row.consistency_points); existing.evolution_points += Number(row.evolution_points); existing.volume_points += Number(row.volume_points); existing.bonus_points += Number(row.bonus_points); existing.completed_days += Number(row.completed_days); existing.total_points += Number(row.total_points); totals.set(row.user_id, existing) }); setRows([...totals.values()].sort((a, b) => b.total_points - a.total_points)); setLoading(false) }; load() }, []); const position = rows.findIndex(row => row.user_id === userId) + 1; return <><PageTitle eyebrow="PLACAR DA TEMPORADA" title="Quem está se movendo?" detail="Pontuação oficial calculada e validada pelo Supabase." /><div className="your-position"><div><span className="eyebrow">SUA POSIÇÃO</span><h2>{position ? `#${position}` : '-'} <small>de {rows.length} pessoas</small></h2></div><div className="gap-copy"><strong>{rows[position - 2] ? `${(rows[position - 2].total_points - (rows[position - 1]?.total_points ?? 0)).toLocaleString('pt-BR')} pts` : 'No topo'}</strong><span>{rows[position - 2] ? 'para alcançar a posição acima' : 'continue consistente'}</span></div></div><SectionHeading title="Ranking geral" action="Pontuação total" /><div className="leaderboard">{loading ? <p className="admin-empty">Carregando ranking...</p> : rows.map((person, index) => <div className={`rank-row ${person.user_id === userId ? 'current-user' : ''}`} key={person.user_id}><span className="rank-number">{index + 1}</span><span className="rank-avatar">{person.user_id === userId ? '🪩' : '✦'}</span><div className="rank-person"><strong>{person.profiles?.full_name ?? 'Participante'}</strong><span><Flame size={13} /> {person.completed_days} dias <i /> {person.consistency_points} pts consistência</span></div><strong className="rank-points">{person.total_points.toLocaleString('pt-BR')} <small>pts</small></strong></div>)}</div><SeasonResults /><div className="score-info"><CircleHelp size={18} /><div><strong>Como funciona o placar?</strong><p>Consistência, evolução e volume vêm de atividades validadas no servidor. Peso, IMC, gordura corporal, medidas e aparência não participam do ranking. Na premiação as categorias acumulam: quem vence mais de uma recebe todas.</p></div><ChevronRight size={17} /></div></> }
 
 function RegisterPage({ activeSession, completedSession, onStarted, onCompleted, onCancelled, onDone }: { onCancelled: () => void; activeSession: ActivitySession | null; completedSession: ActivitySession | null; onStarted: (session: ActivitySession) => void; onCompleted: (session: ActivitySession) => void; onDone: (session: ActivitySession) => void }) { return <><PageTitle eyebrow="CHECK-IN MOVE" title={activeSession ? 'Atividade em andamento.' : completedSession ? 'Atividade concluída.' : 'Qual foi o movimento?'} detail={activeSession ? 'O tempo continua sendo contado pelo horário real do servidor.' : completedSession ? 'Revise os dados antes de enviar para validação.' : 'Comece uma sessão para registrar seu movimento.'} /><ActivitySessionForm activeSession={activeSession} completedSession={completedSession} onStarted={onStarted} onCompleted={onCompleted} onCancelled={onCancelled} onDone={onDone} /></> }
 function formatDuration(totalSeconds: number) { const safeSeconds = Math.max(0, totalSeconds); const hours = Math.floor(safeSeconds / 3600).toString().padStart(2, '0'); const minutes = Math.floor((safeSeconds % 3600) / 60).toString().padStart(2, '0'); const seconds = Math.floor(safeSeconds % 60).toString().padStart(2, '0'); return `${hours}:${minutes}:${seconds}` }
@@ -347,6 +360,181 @@ const duelStatusLabel: Record<DuelRow['status'], string> = {
   expired: 'expirado', finished: 'encerrado',
 }
 
+type DuelBoard = {
+  week_number: number; week_start: string; week_end: string; days_left: number
+  challenger: { user_id: string; days: number; consistency: number; volume: number; dates: string[] }
+  opponent: { user_id: string; days: number; consistency: number; volume: number; dates: string[] }
+}
+
+function DuelScoreboard({ duel, userId }: { key?: string; duel: DuelRow; userId: string }) {
+  const [board, setBoard] = useState<DuelBoard | null>(null)
+  const [error, setError] = useState('')
+  useEffect(() => {
+    if (!supabase) return
+    supabase.rpc('duel_scoreboard', { p_duel_id: duel.id }).then(({ data, error: rpcError }) => {
+      if (rpcError) setError(rpcError.message); else setBoard(data as DuelBoard)
+    })
+  }, [duel.id])
+
+  if (error) return <p className="form-error session-error">{error}</p>
+  if (!board) return <p className="admin-empty">Carregando placar...</p>
+
+  const iAmChallenger = duel.challenger_id === userId
+  const me = iAmChallenger ? board.challenger : board.opponent
+  const rival = iAmChallenger ? board.opponent : board.challenger
+  const rivalName = (iAmChallenger ? duel.opponent : duel.challenger)?.full_name ?? 'Adversário'
+  const start = new Date(`${board.week_start}T12:00:00`)
+  const weekDays = Array.from({ length: 6 }, (_, index) => {
+    const date = new Date(start)
+    date.setDate(start.getDate() + index)
+    return date.toISOString().slice(0, 10)
+  })
+  const label = ['S', 'T', 'Q', 'Q', 'S', 'S']
+  const lead = me.days - rival.days
+
+  return <div className="duel-board">
+    <div className="duel-score">
+      <div><span className="eyebrow">VOCÊ</span><strong>{me.days}</strong></div>
+      <span className="duel-versus">×</span>
+      <div><span className="eyebrow">{rivalName.split(' ')[0].toUpperCase()}</span><strong>{rival.days}</strong></div>
+    </div>
+    <p className="duel-lead">{
+      lead > 0 ? `Você está ${lead} dia${lead > 1 ? 's' : ''} à frente.`
+      : lead < 0 ? `Você está ${-lead} dia${lead < -1 ? 's' : ''} atrás.`
+      : 'Empatados por dias — desempate por consistência.'
+    } {board.days_left > 0 ? `Faltam ${board.days_left} dia${board.days_left > 1 ? 's' : ''} pontuáveis.` : 'Semana encerrada, aguardando apuração.'}</p>
+    <div className="duel-track">
+      <span className="duel-track-name">você</span>
+      {weekDays.map((date, index) => <i key={date} className={me.dates.includes(date) ? 'done' : ''}>{label[index]}</i>)}
+    </div>
+    <div className="duel-track">
+      <span className="duel-track-name">{rivalName.split(' ')[0].toLowerCase()}</span>
+      {weekDays.map((date, index) => <i key={date} className={rival.dates.includes(date) ? 'done' : ''}>{label[index]}</i>)}
+    </div>
+    <small className="duel-tiebreak">Desempate: consistência {me.consistency} × {rival.consistency} · volume {me.volume} × {rival.volume}</small>
+  </div>
+}
+
+type GroupRow = { id: string; name: string; owner_id: string; invite_code: string }
+type GroupMemberStanding = { user_id: string; full_name: string; avatar_emoji: string | null; points: number; days: number }
+type GroupStanding = { season_name: string | null; members: GroupMemberStanding[] }
+
+function GroupsPage({ userId, onAction }: { userId: string; onAction: (message: string) => void }) {
+  const [groups, setGroups] = useState<GroupRow[]>([])
+  const [standing, setStanding] = useState<Record<string, GroupStanding>>({})
+  const [openId, setOpenId] = useState('')
+  const [name, setName] = useState('')
+  const [code, setCode] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  const load = async () => {
+    if (!supabase) { setLoading(false); return }
+    const { data, error: loadError } = await supabase
+      .from('group_members').select('groups(id, name, owner_id, invite_code)')
+    if (loadError) { setError(loadError.message); setLoading(false); return }
+    setError('')
+    setGroups(((data ?? []) as unknown as Array<{ groups: GroupRow | null }>).map(row => row.groups).filter(Boolean) as GroupRow[])
+    setLoading(false)
+  }
+  useEffect(() => { load() }, [userId])
+
+  const openGroup = async (groupId: string) => {
+    if (openId === groupId) { setOpenId(''); return }
+    setOpenId(groupId)
+    if (!supabase || standing[groupId]) return
+    const { data, error: rpcError } = await supabase.rpc('group_standing', { p_group_id: groupId })
+    if (rpcError) setError(rpcError.message)
+    else setStanding(current => ({ ...current, [groupId]: data as GroupStanding }))
+  }
+
+  const create = async () => {
+    if (!supabase || name.trim().length < 2) { setError('Dê um nome com pelo menos 2 letras.'); return }
+    setBusy(true); setError('')
+    const { data, error: rpcError } = await supabase.rpc('create_group', { p_name: name })
+    setBusy(false)
+    if (rpcError) setError(rpcError.message)
+    else { setName(''); onAction(`Grupo criado. Código: ${(data as GroupRow).invite_code}`); load() }
+  }
+
+  const join = async () => {
+    if (!supabase || code.trim().length < 6) { setError('O código tem 6 caracteres.'); return }
+    setBusy(true); setError('')
+    const { data, error: rpcError } = await supabase.rpc('join_group', { p_invite_code: code })
+    setBusy(false)
+    if (rpcError) setError(rpcError.message)
+    else { setCode(''); onAction(`Você entrou em ${(data as GroupRow).name}.`); load() }
+  }
+
+  const leave = async (group: GroupRow) => {
+    if (!supabase) return
+    if (!window.confirm(`Sair de ${group.name}?`)) return
+    setBusy(true); setError('')
+    const { error: rpcError } = await supabase.rpc('leave_group', { p_group_id: group.id })
+    setBusy(false)
+    if (rpcError) setError(rpcError.message)
+    else { setOpenId(''); onAction(`Você saiu de ${group.name}.`); load() }
+  }
+
+  const share = (group: GroupRow) => {
+    const text = `Entra no meu grupo "${group.name}" no MOVE. Código: ${group.invite_code}`
+    if (navigator.share) navigator.share({ text }).catch(() => undefined)
+    else navigator.clipboard?.writeText(text).then(() => onAction('Convite copiado.')).catch(() => undefined)
+  }
+
+  return <>
+    <PageTitle eyebrow="GRUPOS" title="Quem você acompanha." detail="Grupos não mudam a temporada nem a premiação. Servem para acompanhar de perto quem você conhece." />
+    {error && <div className="form-error">{error}</div>}
+
+    <div className="form-panel">
+      <div className="form-row">
+        <label>Criar um grupo<input maxLength={40} placeholder="Equipe trabalho" value={name} onChange={event => { setName(event.target.value); setError('') }} /></label>
+        <label>Entrar com código<input maxLength={6} placeholder="A1B2C3" value={code} onChange={event => { setCode(event.target.value.toUpperCase()); setError('') }} /></label>
+      </div>
+      <div className="review-actions">
+        <button className="primary-button compact" disabled={busy} onClick={create}>Criar <Plus size={15} /></button>
+        <button className="text-button" disabled={busy} onClick={join}>Entrar no grupo</button>
+      </div>
+    </div>
+
+    <section className="admin-review">
+      <SectionHeading title="Seus grupos" />
+      <div className="admin-review-list">{loading ? <p className="admin-empty">Carregando...</p>
+        : groups.length === 0 ? <p className="admin-empty">Você ainda não faz parte de nenhum grupo. Crie um e mande o código para quem quiser acompanhar junto.</p>
+        : groups.map(group => {
+          const open = openId === group.id
+          const rows = standing[group.id]?.members ?? []
+          return <div key={group.id}>
+            <button className="result-head" onClick={() => openGroup(group.id)}>
+              <div>
+                <strong>{group.name}</strong>
+                <span>código {group.invite_code}{group.owner_id === userId ? ' · você criou' : ''}</span>
+              </div>
+              <ChevronRight size={18} className={open ? 'result-arrow open' : 'result-arrow'} />
+            </button>
+            {open && <div className="result-body">
+              {rows.length === 0 ? <p className="admin-empty">Carregando ranking do grupo...</p>
+                : rows.map((person, index) => <div className="result-row" key={person.user_id}>
+                    <div>
+                      <strong>{index + 1}º {person.avatar_emoji || '🪩'} {person.full_name}</strong>
+                      <span>{person.points} pts · {person.days} dias</span>
+                    </div>
+                    {person.user_id === userId && <span className="status-pill status-validated">você</span>}
+                  </div>)}
+              <div className="review-actions">
+                <button className="text-button" onClick={() => share(group)}>Convidar <Copy size={14} /></button>
+                <button className="text-button reject" disabled={busy} onClick={() => leave(group)}>Sair do grupo</button>
+              </div>
+            </div>}
+          </div>
+        })}</div>
+    </section>
+
+    <div className="score-info"><CircleHelp size={18} /><div><strong>Como o grupo funciona</strong><p>A temporada, o valor e a premiação continuam sendo um só para todo mundo. O grupo é um recorte do ranking: você vê como está indo em relação a quem escolheu acompanhar. Dá para fazer parte de até 5 grupos.</p></div></div>
+  </>
+}
+
 function DuelsPage({ userId, onAction }: { userId: string; onAction: (message: string) => void }) {
   const [duels, setDuels] = useState<DuelRow[]>([])
   const [suggestions, setSuggestions] = useState<DuelSuggestion[]>([])
@@ -432,6 +620,8 @@ function DuelsPage({ userId, onAction }: { userId: string; onAction: (message: s
               <span className={`status-pill status-${duel.status}`}>{duelStatusLabel[duel.status]}</span>
             </div>
           })}</div>
+      {ongoing.filter(duel => duel.status === 'accepted').map(duel =>
+        <DuelScoreboard key={`board-${duel.id}`} duel={duel} userId={userId} />)}
     </section>
 
     <section className="admin-review">
@@ -480,6 +670,173 @@ const ruleLabels: Array<[string, string]> = [
   ['evolution_cap', 'Teto de evolução'], ['volume_cap', 'Teto de volume'],
   ['met_min_per_point', 'MET-min por ponto'], ['duel_points', 'Pontos por duelo'],
 ]
+
+type PayoutAward = { type: string; label: string; user_id: string; full_name: string; amount: number }
+type PayoutStanding = { position?: number; user_id: string; full_name: string; avatar_emoji: string | null; points: number; days: number; consistency: number; evolution: number; volume: number; consistency_percent: number }
+type PayoutResult = {
+  season: { id: string; name: string; status: string; weeks: number; max_days: number }
+  pool: number; min_consistency_percent: number; accumulation: boolean
+  standing: PayoutStanding[]; awards: PayoutAward[]
+}
+
+const money = (value: number) => `R$ ${Number(value).toFixed(2).replace('.', ',')}`
+
+type PublishedResult = { season_id: string; published_at: string; payload: PayoutResult }
+
+function SeasonResults() {
+  const [results, setResults] = useState<PublishedResult[]>([])
+  const [openId, setOpenId] = useState('')
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    if (!supabase) { setLoading(false); return }
+    supabase.from('season_results').select('season_id, published_at, payload').order('published_at', { ascending: false })
+      .then(({ data }) => { setResults((data ?? []) as unknown as PublishedResult[]); setLoading(false) })
+  }, [])
+
+  if (loading || results.length === 0) return null
+
+  return <section className="admin-review">
+    <SectionHeading title="Temporadas encerradas" />
+    <div className="admin-review-list">{results.map(result => {
+      const open = openId === result.season_id
+      const awards = result.payload.awards ?? []
+      const byPerson = new Map<string, { name: string; total: number; items: PayoutAward[] }>()
+      awards.forEach(award => {
+        const entry = byPerson.get(award.user_id) ?? { name: award.full_name, total: 0, items: [] }
+        entry.total += Number(award.amount); entry.items.push(award); byPerson.set(award.user_id, entry)
+      })
+      return <div key={result.season_id}>
+        <button className="result-head" onClick={() => setOpenId(open ? '' : result.season_id)}>
+          <div>
+            <strong>{result.payload.season.name}</strong>
+            <span>{money(result.payload.pool)} arrecadados · publicado em {new Date(result.published_at).toLocaleDateString('pt-BR')}</span>
+          </div>
+          <ChevronRight size={18} className={open ? 'result-arrow open' : 'result-arrow'} />
+        </button>
+        {open && <div className="result-body">
+          <div className="result-block">
+            <span className="eyebrow">PREMIAÇÃO</span>
+            {byPerson.size === 0 ? <p className="admin-empty">Nenhum prêmio distribuído.</p>
+              : [...byPerson.entries()].sort((a, b) => b[1].total - a[1].total).map(([userId, entry]) =>
+                <div className="result-row" key={userId}>
+                  <div><strong>{entry.name}</strong><span>{entry.items.map(item => item.label).join(' + ')}</span></div>
+                  <span className="status-pill status-validated">{money(entry.total)}</span>
+                </div>)}
+          </div>
+          <div className="result-block">
+            <span className="eyebrow">CLASSIFICAÇÃO</span>
+            {(result.payload.standing ?? []).map(person =>
+              <div className="result-row" key={person.user_id}>
+                <div>
+                  <strong>{person.position}º {person.avatar_emoji || '🪩'} {person.full_name}</strong>
+                  <span>{person.points} pts · {person.days} dias ({person.consistency_percent}%)</span>
+                </div>
+              </div>)}
+          </div>
+          <small className="result-note">Categorias acumulam: quem venceu mais de uma recebeu todas. Rateio de consistência a partir de {result.payload.min_consistency_percent}% dos dias.</small>
+        </div>}
+      </div>
+    })}</div>
+  </section>
+}
+
+function AdminPayout() {
+  const [seasons, setSeasons] = useState<Array<{ id: string; name: string; status: string }>>([])
+  const [seasonId, setSeasonId] = useState('')
+  const [result, setResult] = useState<PayoutResult | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [published, setPublished] = useState('')
+
+  useEffect(() => {
+    if (!supabase) return
+    supabase.from('seasons').select('id, name, status').order('start_date', { ascending: false })
+      .then(({ data }) => {
+        const list = (data ?? []) as Array<{ id: string; name: string; status: string }>
+        setSeasons(list)
+        if (list.length && !seasonId) setSeasonId(list[0].id)
+      })
+  }, [])
+
+  const run = async () => {
+    if (!supabase || !seasonId) return
+    setBusy(true); setError(''); setResult(null)
+    const { data, error: rpcError } = await supabase.rpc('season_payout', { p_season_id: seasonId })
+    setBusy(false)
+    if (rpcError) setError(rpcError.message); else setResult(data as PayoutResult)
+  }
+
+  const publish = async () => {
+    if (!supabase || !seasonId) return
+    if (!window.confirm('Publicar este resultado para todos os participantes? Os números ficam congelados como estão agora.')) return
+    setBusy(true); setError('')
+    const { data, error: rpcError } = await supabase.rpc('publish_season_payout', { p_season_id: seasonId })
+    setBusy(false)
+    if (rpcError) setError(rpcError.message)
+    else setPublished(new Date((data as { published_at: string }).published_at).toLocaleString('pt-BR'))
+  }
+
+  const byPerson = new Map<string, { name: string; total: number; items: PayoutAward[] }>()
+  ;(result?.awards ?? []).forEach(award => {
+    const entry = byPerson.get(award.user_id) ?? { name: award.full_name, total: 0, items: [] }
+    entry.total += Number(award.amount); entry.items.push(award)
+    byPerson.set(award.user_id, entry)
+  })
+  const distributed = [...byPerson.values()].reduce((sum, entry) => sum + entry.total, 0)
+
+  return <>
+    <PageTitle eyebrow="PREMIAÇÃO" title="Apuração da temporada." detail="O cálculo não grava pagamento: você confere, paga por PIX e o registro fica no seu controle." />
+    {error && <div className="form-error">{error}</div>}
+
+    <div className="form-panel">
+      <label>Temporada<select value={seasonId} onChange={event => { setSeasonId(event.target.value); setResult(null) }}>
+        {seasons.map(season => <option key={season.id} value={season.id}>{season.name} · {season.status}</option>)}
+      </select></label>
+      <button className="primary-button" disabled={busy || !seasonId} onClick={run}>{busy ? 'Apurando...' : 'Apurar premiação'} <Trophy size={16} /></button>
+    </div>
+
+    {result && <>
+      <section className="admin-review">
+        <SectionHeading title="Resumo" />
+        <div className="admin-grid">
+          <Stat icon={<Trophy />} label="arrecadado" value={money(result.pool)} accent="violet" />
+          <Stat icon={<Users />} label="participantes" value={String(result.standing.length)} accent="cyan" />
+          <Stat icon={<Check />} label="a distribuir" value={money(distributed)} accent="cyan" />
+          <Stat icon={<Flame />} label="semanas" value={String(result.season.weeks)} accent="orange" />
+        </div>
+        <p className="submit-hint">Sobra para a organização: {money(result.pool - distributed)}. Categorias acumulam — quem vence mais de uma recebe todas.</p>
+        <button className="primary-button" disabled={busy} onClick={publish}>{busy ? 'Publicando...' : 'Publicar resultado para os participantes'} <ArrowUpRight size={16} /></button>
+        {published && <p className="form-success">Resultado publicado em {published}. Todos os participantes já conseguem ver na aba Ranking.</p>}
+      </section>
+
+      <section className="admin-review">
+        <SectionHeading title="Quem recebe" />
+        <div className="admin-review-list">{byPerson.size === 0 ? <p className="admin-empty">Nenhum prêmio a distribuir nesta temporada.</p>
+          : [...byPerson.entries()].sort((a, b) => b[1].total - a[1].total).map(([userId, entry]) =>
+            <div className="admin-review-row" key={userId}>
+              <div>
+                <strong>{entry.name}</strong>
+                <span>{entry.items.map(item => `${item.label} ${money(item.amount)}`).join(' · ')}</span>
+                {entry.items.length > 1 && <small>acumulou {entry.items.length} categorias</small>}
+              </div>
+              <span className="status-pill status-validated">{money(entry.total)}</span>
+            </div>)}</div>
+      </section>
+
+      <section className="admin-review">
+        <SectionHeading title="Classificação final" />
+        <div className="admin-review-list">{result.standing.map((person, index) =>
+          <div className="admin-review-row" key={person.user_id}>
+            <div>
+              <strong>{index + 1}º {person.avatar_emoji || '🪩'} {person.full_name}</strong>
+              <span>{person.points} pts · {person.days} dias ({person.consistency_percent}%) · evolução {person.evolution}</span>
+              <small>{person.consistency_percent >= result.min_consistency_percent ? `dentro do rateio de consistência (mínimo ${result.min_consistency_percent}%)` : `fora do rateio de consistência`}</small>
+            </div>
+          </div>)}</div>
+      </section>
+    </>}
+  </>
+}
 
 function AdminSettings() {
   const [seasons, setSeasons] = useState<SeasonOption[]>([])
@@ -592,7 +949,7 @@ function Badge({ icon, title, unlocked = false }: { icon: string; title: string;
 
 function ProfilePage({ profile, onNavigate, onAction }: { profile: Profile | null; onNavigate: (page: Page) => void; onAction: (message: string) => void }) { const { updateProfile } = useAuth(); const [name, setName] = useState(profile?.full_name ?? ''); const [phone, setPhone] = useState(profile?.phone ?? ''); const [busy, setBusy] = useState(false); const [message, setMessage] = useState(''); const [error, setError] = useState(''); useEffect(() => { setName(profile?.full_name ?? ''); setPhone(profile?.phone ?? '') }, [profile]); const save = async (event: React.FormEvent) => { event.preventDefault(); setBusy(true); setError(''); setMessage(''); const result = await updateProfile({ fullName: name, phone }); setBusy(false); if (result.error) setError(result.error.message); else setMessage('Perfil atualizado.') }; return <><section className="profile-head"><div className="profile-avatar">{profile?.avatar_emoji || '🪩'}<span className="status-check"><Check size={11} /></span></div><div><span className="eyebrow">SEU PERFIL</span><h1>{profile?.full_name ?? 'Seu perfil'}</h1><p>{profile?.email ?? 'Conta autenticada'} · participante {profile?.status === 'pending' ? 'pendente' : 'ativo'}</p></div><button className="icon-button" aria-label="Editar perfil"><MoreHorizontal size={20} /></button></section><form className="form-panel profile-edit-form" onSubmit={save}><label>Nome completo<input required minLength={2} maxLength={120} value={name} onChange={event => setName(event.target.value)} /></label><label>Celular<input value={phone} onChange={event => setPhone(event.target.value)} autoComplete="tel" /></label><p className="form-note"><Lock size={13} /> E-mail, status e permissão são controlados pelo sistema.</p><button className="primary-button" disabled={busy}>{busy ? 'Salvando...' : 'Salvar perfil'} <Check size={16} /></button>{message && <div className="form-success">{message}</div>}{error && <div className="form-error">{error}</div>}</form><div className="profile-stats"><div><strong>Dados oficiais</strong><span>pontuação no ranking</span></div><div><strong>Privado</strong><span>sem dados corporais</span></div><div><strong>Seguro</strong><span>RLS ativo</span></div></div><SectionHeading title="Seus badges" action="Ver todos" onClick={() => onNavigate('challenges')} /><div className="badge-grid profile-badges"><Badge icon="🔥" title="Primeiro streak" unlocked /><Badge icon="🚀" title="Virada de jogo" unlocked /><Badge icon="🧭" title="Explorador" unlocked /></div><div className="settings-list"><button onClick={() => onAction('Notificações atualizadas.')}><Bell size={18} /><span>Notificações</span><small>Ativas</small><ChevronRight size={17} /></button><button onClick={() => onNavigate('rules')}><ShieldCheck size={18} /><span>Privacidade e LGPD</span><ChevronRight size={17} /></button></div></> }
 
-function RulesPage() { return <><PageTitle eyebrow="MANUAL MOVE" title="O jogo é consistência." detail="Regras claras para uma competição leve, justa e divertida." /><div className="rules-intro"><Target size={22} /><p>A meta não é ser o mais intenso. É aparecer por você, um dia de cada vez.</p></div><RuleBlock title="Temporada" text="Cada temporada dura 8 semanas. A Semana 0 é dedicada ao onboarding e à definição do seu baseline. O 7º dia de cada semana é descanso e não pontua." /><RuleBlock title="Meta diária" text="Complete 30 minutos de atividade contínua ou alcance 8.000 passos. Você tem até 6 dias pontuáveis por semana." /><RuleBlock title="Como a pontuação é calculada" text="Consistência: 10 pontos por dia completo, até 60 por semana, mais 15 pontos ao completar 5 dias ou mais. Evolução: 1 ponto a cada 2% de melhoria contra seu baseline, até 25 pontos. Volume: 1 ponto a cada 40 MET-min, até 20 pontos. O teto semanal é 120 pontos." /><RuleBlock title="Coringas" text="Você recebe 2 coringas por temporada. Use um para neutralizar um dia perdido sem quebrar seu streak. Coringas não geram pontos, apenas protegem sua consistência." /><RuleBlock title="Jogo limpo e privacidade" text="O ranking nunca usa peso, IMC, gordura corporal, medidas ou aparência. Dados são usados apenas para autenticação, competição e comunicação. No modo Supabase, o cálculo final deve ser validado no servidor via RPC ou Edge Function, com baseline congelado, timestamp, janela de edição e trilha de auditoria." /></> }
+function RulesPage() { return <><PageTitle eyebrow="MANUAL MOVE" title="O jogo é consistência." detail="Regras claras para uma competição leve, justa e divertida." /><div className="rules-intro"><Target size={22} /><p>A meta não é ser o mais intenso. É aparecer por você, um dia de cada vez.</p></div><RuleBlock title="Temporada" text="Cada temporada dura 8 semanas. A Semana 0 é dedicada ao onboarding e à definição do seu baseline. O 7º dia de cada semana é descanso e não pontua." /><RuleBlock title="Meta diária" text="Complete 30 minutos de atividade contínua ou alcance 8.000 passos. Você tem até 6 dias pontuáveis por semana." /><RuleBlock title="Como a pontuação é calculada" text="Consistência: 10 pontos por dia completo, até 60 por semana, mais 15 pontos ao completar 5 dias ou mais. Evolução: 1 ponto a cada 2% de melhoria contra seu baseline, até 25 pontos. Volume: 1 ponto a cada 40 MET-min, até 20 pontos. O teto semanal é 120 pontos." /><RuleBlock title="Duelos" text="Você pode desafiar um participante por semana, sempre nos quatro primeiros dias. A pessoa tem 24 horas para aceitar ou recusar, sem penalidade se recusar. Vence quem concluir mais dias na semana; empate desempata por consistência e depois por volume. O vencedor ganha pontos que somam por fora do teto semanal. No máximo dois duelos com a mesma pessoa por temporada." /><RuleBlock title="Prêmios e acúmulo" text="O valor arrecadado é dividido entre campeão, segundo, terceiro, maior evolução e um rateio entre quem mantiver a consistência mínima. As categorias acumulam: quem for campeão e também tiver a maior evolução recebe as duas fatias, e quem está no pódio continua entrando no rateio de consistência. O melhor desempenho é premiado por inteiro, sem prêmio de consolo." /><RuleBlock title="Coringas" text="Você recebe 2 coringas por temporada. Use um para neutralizar um dia perdido sem quebrar seu streak. Coringas não geram pontos, apenas protegem sua consistência." /><RuleBlock title="Jogo limpo e privacidade" text="O ranking nunca usa peso, IMC, gordura corporal, medidas ou aparência. Dados são usados apenas para autenticação, competição e comunicação. No modo Supabase, o cálculo final deve ser validado no servidor via RPC ou Edge Function, com baseline congelado, timestamp, janela de edição e trilha de auditoria." /></> }
 function RuleBlock({ title, text }: { title: string; text: string }) { return <article className="rule-block"><span className="rule-number">{title.slice(0, 1)}</span><div><h2>{title}</h2><p>{text}</p></div></article> }
 
 function RegisterModal({ season, activeSession, completedSession, onClose, onStarted, onCompleted, onCancelled, onDone }: { season: CurrentSeason | null; activeSession: ActivitySession | null; completedSession?: ActivitySession | null; onClose: () => void; onCancelled: () => void; onStarted: (session: ActivitySession) => void; onCompleted?: (session: ActivitySession) => void; onDone: (session: ActivitySession) => void }) { return <div className="modal-backdrop" onMouseDown={activeSession ? undefined : onClose}><div className="register-modal" onMouseDown={e => e.stopPropagation()}><div className="modal-head"><div><span className="eyebrow">{activeSession ? 'SESSÃO ATIVA' : 'NOVO MOVIMENTO'}</span><h2>{activeSession ? 'Continue no seu ritmo.' : 'Comece seu movimento.'}</h2></div>{!activeSession && <button className="icon-button" onClick={onClose}><X size={20} /></button>}</div><ActivitySessionForm season={season} activeSession={activeSession} completedSession={completedSession ?? null} onStarted={onStarted} onCompleted={onCompleted ?? (() => undefined)} onCancelled={onCancelled} onDone={onDone} /></div></div> }
