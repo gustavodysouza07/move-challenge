@@ -18,13 +18,13 @@ import { createRoot } from 'react-dom/client'
 import {
   Activity, ArrowUpRight, Award, Bell, BookOpen, Check, ChevronRight, CircleHelp,
   Flame, Footprints, Gauge, History, Home, Lock, Menu, MessageCircle, MoreHorizontal,
-  Copy, Play, Plus, ShieldCheck, Swords, Target, Trophy, UserRound, Users, X, Zap,
+  Copy, Play, Plus, ShieldCheck, Swords, Target, Trophy, UserRound, Users, X, Zap, Smartphone
 } from 'lucide-react'
 import { AuthProvider, useAuth, type Profile } from './lib/auth'
 import { supabase } from './lib/supabase'
 import './styles.css'
 
-type Page = 'home' | 'ranking' | 'register' | 'activities' | 'challenges' | 'groups' | 'profile' | 'rules' | 'privacy' | 'faq' | 'admin' | 'enrollment'
+type Page = 'home' | 'ranking' | 'register' | 'activities' | 'challenges' | 'groups' | 'profile' | 'rules' | 'privacy' | 'faq' | 'install' | 'admin' | 'enrollment'
 type ActivityType = 'Caminhada leve' | 'Caminhada rápida / inclinação' | 'Musculação moderada' | 'Musculação pesada' | 'Bike / spinning' | 'Natação' | 'Corrida' | 'Funcional / HIIT' | 'Yoga / alongamento'
 type ActivitySession = { id: string; activity_type: ActivityType; started_at: string; ended_at: string | null; status: 'active' | 'pending_validation' | 'validated' | 'rejected' | 'completed' | 'cancelled'; duration_seconds: number | null; paused_seconds?: number }
 type CurrentSeason = { id: string; name: string; start_date: string; end_date: string; status: 'registration' | 'active' }
@@ -96,9 +96,9 @@ function App() {
       <button className="season-pill" onClick={() => go('enrollment')}><span className="live-dot" /> {currentSeason?.name ?? 'Nenhuma temporada disponível'} <ChevronRight size={13} /></button>
       <div className="top-actions"><button className="icon-button" onClick={() => notify('Você está em dia!')} aria-label="Notificações"><Bell size={19} /><span className="notification-dot" /></button><button className="avatar-button" onClick={() => go('profile')}>{profile?.avatar_emoji || '🪩'}</button><button className="icon-button menu-button" onClick={() => setMenuOpen(!menuOpen)} aria-label="Abrir menu"><Menu size={20} /></button></div>
     </header>
-    {menuOpen && <div className="quick-menu"><button onClick={() => go('rules')}><BookOpen size={17} /> Como pontua</button><button onClick={() => go('groups')}><Users size={17} /> Meus grupos</button><button onClick={() => go('faq')}><CircleHelp size={17} /> Perguntas frequentes</button><button onClick={() => go('privacy')}><ShieldCheck size={17} /> Privacidade</button>{profile?.role === 'admin' && <button onClick={() => go('admin')}><ShieldCheck size={17} /> Admin</button>}<button onClick={() => notify('Tudo certo: seus dados estão protegidos.')}><ShieldCheck size={17} /> Privacidade</button><button onClick={() => signOut()}><Lock size={17} /> Sair</button></div>}
+    {menuOpen && <div className="quick-menu"><button onClick={() => go('rules')}><BookOpen size={17} /> Como pontua</button><button onClick={() => go('groups')}><Users size={17} /> Meus grupos</button><button onClick={() => go('install')}><Smartphone size={17} /> Instalar no celular</button><button onClick={() => go('faq')}><CircleHelp size={17} /> Perguntas frequentes</button><button onClick={() => go('privacy')}><ShieldCheck size={17} /> Privacidade</button>{profile?.role === 'admin' && <button onClick={() => go('admin')}><ShieldCheck size={17} /> Admin</button>}<button onClick={() => notify('Tudo certo: seus dados estão protegidos.')}><ShieldCheck size={17} /> Privacidade</button><button onClick={() => signOut()}><Lock size={17} /> Sair</button></div>}
 
-    <main className="content">{page === 'home' && <HomePage userId={user.id} onNavigate={go} onRegister={() => setShowRegister(true)} done={activityDone} />}{page === 'ranking' && <RankingPage userId={user.id} />}{page === 'register' && <RegisterPage onCancelled={() => { setActiveSession(null); setCompletedSession(null) }} activeSession={activeSession} completedSession={completedSession} onStarted={setActiveSession} onCompleted={session => { setActiveSession(null); setCompletedSession(session) }} onDone={(session) => { setCompletedSession(null); setActivityDone(true); notify(`Atividade de ${formatDuration(session.duration_seconds ?? 0)} enviada para validação.`); go('home') }} />}{page === 'activities' && <ActivityHistoryPage userId={user.id} />}{page === 'challenges' && <DuelsPage userId={user.id} onAction={notify} />}{page === 'groups' && <GroupsPage userId={user.id} onAction={notify} />}{page === 'profile' && <ProfilePage profile={profile} onNavigate={go} onAction={notify} />}{page === 'rules' && <RulesPage />}{page === 'privacy' && <PrivacyPage />}{page === 'faq' && <FaqPage />}{page === 'enrollment' && <EnrollmentPage />}{page === 'admin' && (profile?.role === 'admin' ? <AdminWorkspace /> : <AccessState title="Área restrita" detail="Apenas administradores podem acessar este espaço." onAction={() => go('home')} action="Voltar" />)}</main>
+    <main className="content">{page === 'home' && <HomePage userId={user.id} onNavigate={go} onRegister={() => setShowRegister(true)} done={activityDone} />}{page === 'ranking' && <RankingPage userId={user.id} />}{page === 'register' && <RegisterPage onCancelled={() => { setActiveSession(null); setCompletedSession(null) }} activeSession={activeSession} completedSession={completedSession} onStarted={setActiveSession} onCompleted={session => { setActiveSession(null); setCompletedSession(session) }} onDone={(session) => { setCompletedSession(null); setActivityDone(true); notify(`Atividade de ${formatDuration(session.duration_seconds ?? 0)} enviada para validação.`); go('home') }} />}{page === 'activities' && <ActivityHistoryPage userId={user.id} />}{page === 'challenges' && <DuelsPage userId={user.id} onAction={notify} />}{page === 'groups' && <GroupsPage userId={user.id} onAction={notify} />}{page === 'profile' && <ProfilePage profile={profile} onNavigate={go} onAction={notify} />}{page === 'rules' && <RulesPage />}{page === 'privacy' && <PrivacyPage />}{page === 'faq' && <FaqPage />}{page === 'install' && <InstallGuide />}{page === 'enrollment' && <EnrollmentPage />}{page === 'admin' && (profile?.role === 'admin' ? <AdminWorkspace /> : <AccessState title="Área restrita" detail="Apenas administradores podem acessar este espaço." onAction={() => go('home')} action="Voltar" />)}</main>
 
     <nav className="bottom-nav">{navItems.map(({ id, label, icon: Icon }) => <button key={id} className={page === id ? 'active' : ''} onClick={() => id === 'register' ? setShowRegister(true) : go(id)}><span className="nav-icon"><Icon size={20} strokeWidth={page === id ? 2.5 : 1.8} /></span><span>{label}</span></button>)}</nav>
     {(showRegister || activeSession || completedSession) && <RegisterModal onCancelled={() => { setActiveSession(null); setCompletedSession(null); setShowRegister(false) }} season={currentSeason} activeSession={activeSession} completedSession={completedSession} onClose={() => { setShowRegister(false); setCompletedSession(null) }} onStarted={setActiveSession} onCompleted={session => { setActiveSession(null); setCompletedSession(session) }} onDone={(session) => { setActiveSession(null); setCompletedSession(null); setActivityDone(true); setShowRegister(false); notify(`Atividade de ${formatDuration(session.duration_seconds ?? 0)} enviada para validação.`) }} />}
@@ -1379,6 +1379,95 @@ const faqSections: Array<{ title: string; items: Array<{ q: string; a: string }>
     ],
   },
 ]
+
+type InstallPrompt = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> }
+
+function detectPlatform() {
+  if (typeof navigator === 'undefined') return { ios: false, android: false, inApp: false, installed: false }
+  const ua = navigator.userAgent
+  const ios = /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)
+  const android = /Android/.test(ua)
+  const inApp = /FBAN|FBAV|Instagram|Line\/|MicroMessenger|WhatsApp|Snapchat|Twitter/i.test(ua)
+  const installed = window.matchMedia?.('(display-mode: standalone)').matches
+    || (navigator as unknown as { standalone?: boolean }).standalone === true
+  return { ios, android, inApp, installed }
+}
+
+function InstallGuide() {
+  const [platform] = useState(detectPlatform)
+  const [prompt, setPrompt] = useState<InstallPrompt | null>(null)
+  const [done, setDone] = useState(false)
+
+  useEffect(() => {
+    const handler = (event: Event) => { event.preventDefault(); setPrompt(event as InstallPrompt) }
+    window.addEventListener('beforeinstallprompt', handler)
+    return () => window.removeEventListener('beforeinstallprompt', handler)
+  }, [])
+
+  const install = async () => {
+    if (!prompt) return
+    await prompt.prompt()
+    const choice = await prompt.userChoice
+    if (choice.outcome === 'accepted') setDone(true)
+    setPrompt(null)
+  }
+
+  const copyLink = () => {
+    navigator.clipboard?.writeText(window.location.origin).catch(() => undefined)
+  }
+
+  if (platform.installed || done) return <>
+    <PageTitle eyebrow="INSTALAR" title="Você já está no app." detail="O MOVE está instalado neste aparelho. Ele abre em tela cheia, guarda seu login e funciona igual a qualquer outro aplicativo." />
+    <div className="score-info"><Check size={18} /><div><strong>Tudo certo</strong><p>Se quiser instalar em outro aparelho, abra o mesmo endereço nele e siga as instruções desta tela.</p></div></div>
+  </>
+
+  return <>
+    <PageTitle eyebrow="INSTALAR" title="Coloque o MOVE na tela do celular." detail="Assim ele abre em tela cheia, com ícone próprio, sem barra de navegador e sem precisar digitar o endereço." />
+
+    {platform.inApp && <div className="install-warning">
+      <strong>Você está no navegador do WhatsApp</strong>
+      <p>Aqui não é possível instalar. Toque nos três pontinhos no canto da tela e escolha "Abrir no navegador" — ou copie o endereço e cole no Safari (iPhone) ou Chrome (Android).</p>
+      <button className="text-button" onClick={copyLink}>Copiar endereço <Copy size={14} /></button>
+    </div>}
+
+    {platform.ios && <section className="admin-review">
+      <SectionHeading title="No iPhone ou iPad" />
+      <ol className="install-steps">
+        <li><strong>Abra no Safari.</strong> Precisa ser o Safari — pelo Chrome do iPhone a opção não aparece.</li>
+        <li><strong>Toque no botão Compartilhar.</strong> É o quadrado com a seta para cima, na barra de baixo.</li>
+        <li><strong>Role a lista e escolha "Adicionar à Tela de Início".</strong></li>
+        <li><strong>Toque em "Adicionar", no canto superior direito.</strong></li>
+      </ol>
+      <p className="submit-hint">O ícone do MOVE aparece junto com seus outros aplicativos. A partir daí, abra sempre por ele.</p>
+    </section>}
+
+    {platform.android && <section className="admin-review">
+      <SectionHeading title="No Android" />
+      {prompt
+        ? <div className="form-panel">
+            <p className="submit-hint">Seu navegador já reconheceu o MOVE. É um toque só.</p>
+            <button className="primary-button" onClick={install}>Instalar agora <ArrowUpRight size={16} /></button>
+          </div>
+        : <ol className="install-steps">
+            <li><strong>Abra no Chrome.</strong></li>
+            <li><strong>Toque nos três pontinhos</strong> no canto superior direito.</li>
+            <li><strong>Escolha "Instalar aplicativo"</strong> ou "Adicionar à tela inicial".</li>
+            <li><strong>Confirme em "Instalar".</strong></li>
+          </ol>}
+    </section>}
+
+    {!platform.ios && !platform.android && <section className="admin-review">
+      <SectionHeading title="No computador" />
+      <ol className="install-steps">
+        <li><strong>No Chrome ou Edge</strong>, procure o ícone de instalar na barra de endereço, à direita.</li>
+        <li><strong>Ou abra o menu</strong> e escolha "Instalar MOVE".</li>
+      </ol>
+      <p className="submit-hint">No celular a experiência é melhor: abra <strong>{typeof window !== 'undefined' ? window.location.host : ''}</strong> no Safari (iPhone) ou Chrome (Android) e siga as instruções desta tela.</p>
+    </section>}
+
+    <div className="score-info"><CircleHelp size={18} /><div><strong>Por que instalar</strong><p>Além da tela cheia e do ícone, o app instalado mantém você logado e carrega mais rápido. Nada é baixado de loja nenhuma — é o mesmo endereço, só que atalhado.</p></div></div>
+  </>
+}
 
 function FaqPage() {
   const [open, setOpen] = useState('')
