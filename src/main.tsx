@@ -270,6 +270,56 @@ type ScoreRow = { user_id: string; consistency_points: number; evolution_points:
 
 type Nudge = { kind: string | null; tone?: string; text?: string }
 
+type WeekChallenge = { code: string; name: string; description: string; icon: string; points: number; done: boolean; current: number; goal: number; unit: string }
+type WeekChallenges = { week_number: number; days_left: number; challenges: WeekChallenge[] }
+
+function WeekChallengesCard() {
+  const [data, setData] = useState<WeekChallenges | null>(null)
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    if (!supabase) { setLoading(false); return }
+    supabase.rpc('my_week_challenges').then(({ data: result, error }) => {
+      if (!error && result) setData(result as WeekChallenges)
+      setLoading(false)
+    })
+  }, [])
+
+  if (loading) return null
+  const list = data?.challenges ?? []
+  if (list.length === 0) return null
+
+  const done = list.filter(item => item.done).length
+  const available = list.reduce((sum, item) => sum + (item.done ? 0 : item.points), 0)
+
+  return <section className="admin-review">
+    <SectionHeading title={`Desafios da semana ${data?.week_number ?? ''}`} />
+    <p className="submit-hint challenge-summary">
+      {done === list.length
+        ? 'Todos concluídos. Semana que vem tem outros.'
+        : `${done} de ${list.length} concluídos · ${available} pontos ainda disponíveis`}
+      {data && data.days_left > 0 ? ` · faltam ${data.days_left} dia(s)` : ''}
+    </p>
+    <div className="challenge-list">{list.map(item => {
+      const pct = item.goal > 0 ? Math.min(100, Math.round((item.current / item.goal) * 100)) : 0
+      return <div className={item.done ? 'challenge-card done' : 'challenge-card'} key={item.code}>
+        <span className="challenge-icon">{item.icon}</span>
+        <div className="challenge-body">
+          <strong>{item.name}</strong>
+          <span>{item.description}</span>
+          {item.done
+            ? <small className="challenge-earned">concluído · +{item.points} pontos</small>
+            : <>
+                <div className="challenge-progress"><span style={{ width: `${pct}%` }} /></div>
+                <small>{item.current.toLocaleString('pt-BR')} de {item.goal.toLocaleString('pt-BR')}{item.unit ? ` ${item.unit}` : ''}</small>
+              </>}
+        </div>
+        <span className={item.done ? 'status-pill status-validated' : 'status-pill'}>+{item.points}</span>
+      </div>
+    })}</div>
+    <p className="submit-hint">Os pontos de desafio somam por fora do teto semanal, como os de duelo.</p>
+  </section>
+}
+
 function NudgeBanner() {
   const [nudge, setNudge] = useState<Nudge | null>(null)
   useEffect(() => {
@@ -291,6 +341,7 @@ function HomePage({ userId, onNavigate, onRegister, done }: { userId: string; on
     <section className="stats-grid"><Stat icon={<Trophy />} label="posição" value={score.position ? `#${score.position}` : '-'} accent="violet" /><Stat icon={<Zap />} label="pontos" value={score.points.toLocaleString('pt-BR')} accent="cyan" /><Stat icon={<Flame />} label="dias concluídos" value={String(score.completedDays)} accent="orange" /></section>
     <section className={`today-card ${progress === 100 ? 'completed' : ''}`}><div className="today-top"><div><span className="eyebrow">META DE HOJE</span><h2>{progress === 100 ? 'Meta batida!' : 'Seu próximo movimento'}</h2></div><div className="progress-ring"><span>{progress}<small>%</small></span></div></div><div className="progress-line"><span style={{ width: `${progress}%` }} /></div><div className="today-bottom"><span><Footprints size={16} /> {progress === 100 ? '30 min completos' : 'Comece uma atividade'}</span><button className="primary-button compact" onClick={onRegister}>{progress === 100 ? 'Registrar mais' : 'Registrar atividade'} <ArrowUpRight size={16} /></button></div></section>
     <SectionHeading title="Arena da semana" action="Ver regras" onClick={() => onNavigate('rules')} /><section className="arena-grid"><MiniChallenge icon={<Target />} tag="PONTUAÇÃO OFICIAL" title="Consistência primeiro" progress={`${score.consistency} pts de consistência`} color="purple" onClick={() => onNavigate('rules')} /><MiniChallenge icon={<Zap />} tag="EVOLUÇÃO" title="Contra seu baseline" progress={`${score.evolution} pts de evolução`} color="yellow" onClick={() => onNavigate('rules')} /><MiniChallenge icon={<Gauge />} tag="VOLUME" title="Intensidade validada" progress={`${score.volume} pts de volume`} color="blue" onClick={() => onNavigate('rules')} /></section>
+    <WeekChallengesCard />
     <SectionHeading title="Seu movimento" action="Ver ranking" onClick={() => onNavigate('ranking')} /><section className="feed-card"><div className="score-info"><Activity size={18} /><div><strong>Dados oficiais do Supabase</strong><p>{score.total ? `${score.total} participantes pontuando nesta temporada.` : 'Ainda não há pontuação registrada nesta temporada.'}</p></div></div><button className="feed-link" onClick={() => onNavigate('ranking')}>Ver ranking geral <ArrowUpRight size={15} /></button></section>
   </>
 }
