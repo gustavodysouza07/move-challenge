@@ -42,3 +42,8 @@
 .result-row span{font-size:10px;color:var(--muted)}
 .result-note{display:block;margin-top:14px;font-size:10px;line-height:1.5;color:#77718d}
 .menu-button{display:grid}
+input,select,textarea{font-size:16px}
+@media (min-width:701px){input,select,textarea{font-size:14px}}
+.baseline-fields{border:1px dashed #4e4770;background:#211b40;border-radius:12px;padding:15px;margin:20px 0}
+.baseline-fields .eyebrow{display:block;margin-bottom:8px}
+.baseline-fields .submit-hint{margin:0 0 14px}

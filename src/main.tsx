@@ -117,13 +117,19 @@ function EnrollmentPage() {
   const [busy, setBusy] = useState(true)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [baseMinutes, setBaseMinutes] = useState('')
+  const [baseSteps, setBaseSteps] = useState('')
   useEffect(() => { if (!supabase || !user) { setBusy(false); return }; const load = async () => { const { data: seasonData } = await supabase.from('seasons').select('id, name, description, entry_fee, pix_key, start_date, end_date').eq('status', 'registration').order('start_date', { ascending: true }).limit(1).maybeSingle(); setSeason(seasonData); if (seasonData) { const { data: paymentData } = await supabase.from('payments').select('id, amount, payment_status, proof_url').eq('user_id', user.id).eq('season_id', seasonData.id).maybeSingle(); setPayment(paymentData) }; setBusy(false) }; load() }, [user])
-  const request = async () => { if (!supabase || !season) return; setBusy(true); setError(''); const { data, error: rpcError } = await supabase.rpc('request_season_participation', { p_season_id: season.id }); setBusy(false); if (rpcError) setError(rpcError.message); else { setPayment(data); setMessage('Inscrição criada. Faça o PIX e confirme o envio do pagamento.') } }
+  const request = async () => {
+    if (!supabase || !season) return
+    if (baseMinutes.trim() === '' || baseSteps.trim() === '') { setError('Preencha seus minutos e passos por dia antes de se inscrever.'); return }
+    setBusy(true); setError('')
+    const { data, error: rpcError } = await supabase.rpc('request_season_participation', { p_season_id: season.id, p_average_active_minutes: Number(baseMinutes), p_average_steps: Number(baseSteps) }); setBusy(false); if (rpcError) setError(rpcError.message); else { setPayment(data); setMessage('Inscrição criada. Faça o PIX e confirme o envio do pagamento.') } }
   const confirmPix = async () => { if (!supabase || !payment) return; setBusy(true); setError(''); const { data, error: updateError } = await supabase.from('payments').update({ payment_status: 'submitted' }).eq('id', payment.id).select('id, amount, payment_status, proof_url').single(); setBusy(false); if (updateError) setError(updateError.message); else { setPayment(data); setMessage('Pagamento enviado. Aguardando aprovação.') } }
   const copyPixKey = async () => { if (!season.pix_key) return; try { await navigator.clipboard.writeText(season.pix_key); setMessage('Chave PIX copiada.') } catch { setError('Não foi possível copiar a chave PIX.') } }
   const uploadProof = async (file: File) => { if (!supabase || !payment || !user) return; setError(''); const allowed = ['image/jpeg', 'image/png', 'application/pdf']; if (!allowed.includes(file.type) || file.size > 5 * 1024 * 1024) { setError('Envie somente JPG, JPEG, PNG ou PDF de até 5 MB.'); return }; setBusy(true); const path = `${user.id}/${payment.id}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '-')}`; const upload = await supabase.storage.from('payment-proofs').upload(path, file, { upsert: false, contentType: file.type }); if (upload.error) { setBusy(false); setError(upload.error.message); return }; const { data, error: submitError } = await supabase.rpc('submit_payment_proof', { p_payment_id: payment.id, p_storage_path: path }); setBusy(false); if (submitError) setError(submitError.message); else { setPayment(data); setMessage('Comprovante enviado. A confirmação depende da revisão administrativa.') } }
   const statusLabel = payment?.payment_status === 'submitted' ? 'aguardando confirmação' : payment?.payment_status === 'confirmed' ? 'aprovado' : payment?.payment_status === 'rejected' ? 'rejeitado' : 'pagamento pendente'
-  return <><PageTitle eyebrow="INSCRIÇÃO" title="Entre para a temporada." detail="Sua participação só fica ativa após a confirmação manual do PIX." />{busy && !season ? <div className="form-panel"><p>Carregando temporada disponível...</p></div> : !season ? <div className="score-info"><CircleHelp size={18} /><div><strong>Nenhuma temporada disponível no momento.</strong><p>Assim que uma temporada estiver em período de inscrição, ela aparecerá aqui.</p></div></div> : <div className="form-panel enrollment-panel"><span className="eyebrow">INSCRIÇÃO</span><h2>{season.name}</h2><p>{season.description ?? 'Consistência que transforma.'}</p><div className="enrollment-details"><span>Período <strong>{new Date(season.start_date).toLocaleDateString('pt-BR')} a {new Date(season.end_date).toLocaleDateString('pt-BR')}</strong></span><span>Taxa <strong>R$ {Number(season.entry_fee).toFixed(2).replace('.', ',')}</strong></span></div>{!payment ? <button className="primary-button full" disabled={busy} onClick={request}>{busy ? 'Criando inscrição...' : 'Participar da temporada'} <ArrowUpRight size={16} /></button> : <><div className="pix-instructions"><strong>Pagamento PIX</strong><p>Envie R$ {Number(payment.amount).toFixed(2).replace('.', ',')} para a chave:</p><div className="pix-key-row"><strong>{season.pix_key ?? 'Chave PIX ainda não configurada'}</strong>{season.pix_key && <button className="icon-button" aria-label="Copiar chave PIX" title="Copiar chave PIX" onClick={copyPixKey}><Copy size={16} /></button>}</div><span>Status: {statusLabel}</span></div>{payment.payment_status === 'pending' && <button className="primary-button full" disabled={busy} onClick={confirmPix}>{busy ? 'Enviando...' : 'Já fiz o PIX'} <Check size={16} /></button>}{payment.payment_status !== 'confirmed' && <label className="upload-proof">Anexar comprovante<input disabled={busy} type="file" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" onChange={e => e.target.files?.[0] && uploadProof(e.target.files[0])} /></label>}{payment.payment_status === 'submitted' && <div className="form-success">Pagamento enviado. Aguardando aprovação.</div>}</>}{message && <div className="form-success">{message}</div>}{error && <div className="form-error">{error}</div>}</div>}</>
+  return <><PageTitle eyebrow="INSCRIÇÃO" title="Entre para a temporada." detail="Sua participação só fica ativa após a confirmação manual do PIX." />{busy && !season ? <div className="form-panel"><p>Carregando temporada disponível...</p></div> : !season ? <div className="score-info"><CircleHelp size={18} /><div><strong>Nenhuma temporada disponível no momento.</strong><p>Assim que uma temporada estiver em período de inscrição, ela aparecerá aqui.</p></div></div> : <div className="form-panel enrollment-panel"><span className="eyebrow">INSCRIÇÃO</span><h2>{season.name}</h2><p>{season.description ?? 'Consistência que transforma.'}</p><div className="enrollment-details"><span>Período <strong>{new Date(season.start_date).toLocaleDateString('pt-BR')} a {new Date(season.end_date).toLocaleDateString('pt-BR')}</strong></span><span>Taxa <strong>R$ {Number(season.entry_fee).toFixed(2).replace('.', ',')}</strong></span></div>{!payment ? <><div className="baseline-fields"><span className="eyebrow">SEU PONTO DE PARTIDA</span><p className="submit-hint">A evolução compara você com você mesmo, e este número fica congelado depois da inscrição. Não envolve peso, medidas nem aparência — informe como está sua rotina hoje.</p><div className="form-row"><label>Minutos de atividade por dia<input type="number" min={0} max={480} placeholder="ex.: 20" value={baseMinutes} onChange={event => { setBaseMinutes(event.target.value); setError('') }} /></label><label>Passos por dia<input type="number" min={0} max={100000} placeholder="ex.: 4500" value={baseSteps} onChange={event => { setBaseSteps(event.target.value); setError('') }} /></label></div></div><button className="primary-button full" disabled={busy} onClick={request}>{busy ? 'Criando inscrição...' : 'Participar da temporada'} <ArrowUpRight size={16} /></button></> : <><div className="pix-instructions"><strong>Pagamento PIX</strong><p>Envie R$ {Number(payment.amount).toFixed(2).replace('.', ',')} para a chave:</p><div className="pix-key-row"><strong>{season.pix_key ?? 'Chave PIX ainda não configurada'}</strong>{season.pix_key && <button className="icon-button" aria-label="Copiar chave PIX" title="Copiar chave PIX" onClick={copyPixKey}><Copy size={16} /></button>}</div><span>Status: {statusLabel}</span></div>{payment.payment_status === 'pending' && <button className="primary-button full" disabled={busy} onClick={confirmPix}>{busy ? 'Enviando...' : 'Já fiz o PIX'} <Check size={16} /></button>}{payment.payment_status !== 'confirmed' && <label className="upload-proof">Anexar comprovante<input disabled={busy} type="file" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" onChange={e => e.target.files?.[0] && uploadProof(e.target.files[0])} /></label>}{payment.payment_status === 'submitted' && <div className="form-success">Pagamento enviado. Aguardando aprovação.</div>}</>}{message && <div className="form-success">{message}</div>}{error && <div className="form-error">{error}</div>}</div>}</>
 }
 
 function AuthScreen({ configured }: { configured: boolean }) {
@@ -162,9 +168,9 @@ function ProofLink({ bucket, path }: { bucket: string; path: string }) {
 
 function AdminWorkspace() {
   const { user } = useAuth()
-  const [tab, setTab] = useState<'dashboard' | 'seasons' | 'participants' | 'payments' | 'activities' | 'ranking' | 'payout' | 'settings'>('dashboard')
-  const tabs = [['dashboard', 'Dashboard'], ['seasons', 'Temporadas'], ['participants', 'Participantes'], ['payments', 'Pagamentos PIX'], ['activities', 'Atividades pendentes'], ['ranking', 'Ranking'], ['payout', 'Premiação'], ['settings', 'Configurações']] as const
-  return <><nav className="admin-tabs">{tabs.map(([id, label]) => <button className={tab === id ? 'active' : ''} key={id} onClick={() => setTab(id)}>{label}</button>)}</nav>{tab === 'dashboard' && <AdminPage />}{tab === 'seasons' && <AdminSeasons />}{tab === 'participants' && <AdminParticipants />}{tab === 'payments' && <AdminPayments />}{tab === 'activities' && <AdminActivities />}{tab === 'ranking' && user && <RankingPage userId={user.id} />}{tab === 'payout' && <AdminPayout />}{tab === 'settings' && <AdminSettings />}</>
+  const [tab, setTab] = useState<'dashboard' | 'seasons' | 'participants' | 'payments' | 'activities' | 'ranking' | 'baselines' | 'payout' | 'settings'>('dashboard')
+  const tabs = [['dashboard', 'Dashboard'], ['seasons', 'Temporadas'], ['participants', 'Participantes'], ['payments', 'Pagamentos PIX'], ['activities', 'Atividades pendentes'], ['ranking', 'Ranking'], ['baselines', 'Ponto de partida'], ['payout', 'Premiação'], ['settings', 'Configurações']] as const
+  return <><nav className="admin-tabs">{tabs.map(([id, label]) => <button className={tab === id ? 'active' : ''} key={id} onClick={() => setTab(id)}>{label}</button>)}</nav>{tab === 'dashboard' && <AdminPage />}{tab === 'seasons' && <AdminSeasons />}{tab === 'participants' && <AdminParticipants />}{tab === 'payments' && <AdminPayments />}{tab === 'activities' && <AdminActivities />}{tab === 'ranking' && user && <RankingPage userId={user.id} />}{tab === 'baselines' && <AdminBaselines />}{tab === 'payout' && <AdminPayout />}{tab === 'settings' && <AdminSettings />}</>
 }
 
 function AdminSeasons() {
@@ -565,6 +571,16 @@ function DuelsPage({ userId, onAction }: { userId: string; onAction: (message: s
     else { onAction(`Duelo proposto para ${name}.`); load() }
   }
 
+  const forfeit = async (duelId: string) => {
+    if (!supabase) return
+    if (!window.confirm('Desistir deste duelo? O adversário vence na hora e recebe os pontos.')) return
+    setBusy(true); setError('')
+    const { error: rpcError } = await supabase.rpc('forfeit_duel', { p_duel_id: duelId })
+    setBusy(false)
+    if (rpcError) setError(rpcError.message)
+    else { onAction('Você desistiu do duelo.'); load() }
+  }
+
   const respond = async (duelId: string, accept: boolean) => {
     if (!supabase) return
     setBusy(true); setError('')
@@ -617,7 +633,10 @@ function DuelsPage({ userId, onAction }: { userId: string; onAction: (message: s
                 <span>Semana {duel.week_number} · {duelStatusLabel[duel.status]}</span>
                 <small>{info.isChallenger ? 'você propôs' : 'você aceitou'}</small>
               </div>
-              <span className={`status-pill status-${duel.status}`}>{duelStatusLabel[duel.status]}</span>
+              <div className="review-actions">
+                <span className={`status-pill status-${duel.status}`}>{duelStatusLabel[duel.status]}</span>
+                {duel.status === 'accepted' && <button className="text-button reject" disabled={busy} onClick={() => forfeit(duel.id)}>Desistir</button>}
+              </div>
             </div>
           })}</div>
       {ongoing.filter(duel => duel.status === 'accepted').map(duel =>
@@ -738,6 +757,135 @@ function SeasonResults() {
       </div>
     })}</div>
   </section>
+}
+
+type BaselineInfo = {
+  season: { id: string; name: string; status: string; start_date: string } | null
+  baseline: { average_active_minutes: number; average_steps: number; frozen_at: string | null } | null
+}
+
+function BaselineCard() {
+  const [info, setInfo] = useState<BaselineInfo | null>(null)
+  const [minutes, setMinutes] = useState('')
+  const [steps, setSteps] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+
+  const load = async () => {
+    if (!supabase) return
+    const { data, error: rpcError } = await supabase.rpc('my_baseline')
+    if (rpcError) { setError(rpcError.message); return }
+    const result = data as BaselineInfo
+    setInfo(result)
+    if (result.baseline) {
+      setMinutes(String(result.baseline.average_active_minutes))
+      setSteps(String(result.baseline.average_steps))
+    }
+  }
+  useEffect(() => { load() }, [])
+
+  const save = async () => {
+    if (!supabase) return
+    setBusy(true); setError(''); setMessage('')
+    const { error: rpcError } = await supabase.rpc('upsert_baseline', {
+      p_average_active_minutes: Number(minutes || 0),
+      p_average_steps: Number(steps || 0),
+    })
+    setBusy(false)
+    if (rpcError) setError(rpcError.message)
+    else { setMessage('Ponto de partida salvo.'); load() }
+  }
+
+  if (!info?.season) return null
+  const frozen = Boolean(info.baseline?.frozen_at)
+
+  return <section className="admin-review">
+    <SectionHeading title="Seu ponto de partida" />
+    <div className="form-panel">
+      <p className="submit-hint">A evolução compara você com você mesmo. Informe como estava sua rotina nas duas semanas anteriores a {new Date(`${info.season.start_date}T12:00:00`).toLocaleDateString('pt-BR')}. Nada aqui envolve peso, medidas ou aparência.</p>
+      <div className="form-row">
+        <label>Minutos de atividade por dia<input type="number" min={0} max={480} disabled={frozen || busy} value={minutes} onChange={event => { setMinutes(event.target.value); setError('') }} placeholder="ex.: 20" /></label>
+        <label>Passos por dia<input type="number" min={0} max={100000} disabled={frozen || busy} value={steps} onChange={event => { setSteps(event.target.value); setError('') }} placeholder="ex.: 4500" /></label>
+      </div>
+      <p className="form-note"><Lock size={13} /> {frozen ? `Congelado em ${new Date(info.baseline!.frozen_at!).toLocaleDateString('pt-BR')}.` : 'Informado na inscrição.'} Este número não pode ser alterado — fale com a organização se estiver errado.</p>
+      {error && <div className="form-error">{error}</div>}
+    </div>
+  </section>
+}
+
+type AdminBaselineRow = { id: string; user_id: string; average_active_minutes: number; average_steps: number; frozen_at: string | null; profiles: { full_name: string } | null }
+
+function AdminBaselines() {
+  const [seasons, setSeasons] = useState<Array<{ id: string; name: string; status: string }>>([])
+  const [seasonId, setSeasonId] = useState('')
+  const [rows, setRows] = useState<AdminBaselineRow[]>([])
+  const [participants, setParticipants] = useState(0)
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!supabase) return
+    supabase.from('seasons').select('id, name, status').order('start_date', { ascending: false })
+      .then(({ data }) => {
+        const list = (data ?? []) as Array<{ id: string; name: string; status: string }>
+        setSeasons(list)
+        if (list.length && !seasonId) setSeasonId(list[0].id)
+      })
+  }, [])
+
+  const load = async () => {
+    if (!supabase || !seasonId) return
+    const [baselineResult, countResult] = await Promise.all([
+      supabase.from('baseline_metrics').select('id, user_id, average_active_minutes, average_steps, frozen_at, profiles!baseline_metrics_user_id_fkey(full_name)').eq('season_id', seasonId),
+      supabase.from('season_participants').select('id', { count: 'exact', head: true }).eq('season_id', seasonId).eq('status', 'active'),
+    ])
+    if (baselineResult.error) { setError(baselineResult.error.message); return }
+    setError('')
+    setRows((baselineResult.data ?? []) as unknown as AdminBaselineRow[])
+    setParticipants(countResult.count ?? 0)
+  }
+  useEffect(() => { load() }, [seasonId])
+
+  const freeze = async () => {
+    if (!supabase || !seasonId) return
+    if (!window.confirm('Congelar os pontos de partida desta temporada? Depois disso ninguém pode mais alterar o próprio número.')) return
+    setBusy(true); setError(''); setMessage('')
+    const { data, error: rpcError } = await supabase.rpc('admin_freeze_baselines', { p_season_id: seasonId })
+    setBusy(false)
+    if (rpcError) setError(rpcError.message)
+    else { setMessage(`${data} ponto(s) de partida congelado(s).`); load() }
+  }
+
+  const pending = participants - rows.length
+
+  return <>
+    <PageTitle eyebrow="PONTO DE PARTIDA" title="Baseline da temporada." detail="A evolução de cada pessoa é medida contra o próprio número. Confira antes de congelar." />
+    {message && <div className="form-success">{message}</div>}
+    {error && <div className="form-error">{error}</div>}
+
+    <div className="form-panel">
+      <label>Temporada<select value={seasonId} onChange={event => setSeasonId(event.target.value)}>
+        {seasons.map(season => <option key={season.id} value={season.id}>{season.name} · {season.status}</option>)}
+      </select></label>
+      <p className="submit-hint">{rows.length} de {participants} participantes ativos preencheram.{pending > 0 ? ` Faltam ${pending}. Quem não preencher fica com evolução zero.` : ' Todos preencheram.'}</p>
+      <button className="primary-button" disabled={busy || rows.length === 0} onClick={freeze}>{busy ? 'Congelando...' : 'Congelar pontos de partida'} <Lock size={16} /></button>
+    </div>
+
+    <section className="admin-review">
+      <SectionHeading title="Declarações" />
+      <div className="admin-review-list">{rows.length === 0 ? <p className="admin-empty">Ninguém preencheu ainda.</p>
+        : rows.map(row => <div className="admin-review-row" key={row.id}>
+            <div>
+              <strong>{row.profiles?.full_name ?? 'Participante'}</strong>
+              <span>{row.average_active_minutes} min/dia · {row.average_steps} passos/dia</span>
+              <small>{row.frozen_at ? `congelado em ${new Date(row.frozen_at).toLocaleDateString('pt-BR')}` : 'ainda pode ser alterado'}</small>
+            </div>
+            <span className={row.frozen_at ? 'status-pill status-validated' : 'status-pill'}>{row.frozen_at ? 'congelado' : 'aberto'}</span>
+          </div>)}</div>
+    </section>
+  </>
 }
 
 function AdminPayout() {
@@ -947,7 +1095,7 @@ function AdminSettings() {
 
 function Badge({ icon, title, unlocked = false }: { icon: string; title: string; unlocked?: boolean }) { return <div className={`badge ${unlocked ? 'unlocked' : ''}`}><span>{unlocked ? icon : '◌'}</span><strong>{title}</strong>{unlocked && <small>conquistado</small>}</div> }
 
-function ProfilePage({ profile, onNavigate, onAction }: { profile: Profile | null; onNavigate: (page: Page) => void; onAction: (message: string) => void }) { const { updateProfile } = useAuth(); const [name, setName] = useState(profile?.full_name ?? ''); const [phone, setPhone] = useState(profile?.phone ?? ''); const [busy, setBusy] = useState(false); const [message, setMessage] = useState(''); const [error, setError] = useState(''); useEffect(() => { setName(profile?.full_name ?? ''); setPhone(profile?.phone ?? '') }, [profile]); const save = async (event: React.FormEvent) => { event.preventDefault(); setBusy(true); setError(''); setMessage(''); const result = await updateProfile({ fullName: name, phone }); setBusy(false); if (result.error) setError(result.error.message); else setMessage('Perfil atualizado.') }; return <><section className="profile-head"><div className="profile-avatar">{profile?.avatar_emoji || '🪩'}<span className="status-check"><Check size={11} /></span></div><div><span className="eyebrow">SEU PERFIL</span><h1>{profile?.full_name ?? 'Seu perfil'}</h1><p>{profile?.email ?? 'Conta autenticada'} · participante {profile?.status === 'pending' ? 'pendente' : 'ativo'}</p></div><button className="icon-button" aria-label="Editar perfil"><MoreHorizontal size={20} /></button></section><form className="form-panel profile-edit-form" onSubmit={save}><label>Nome completo<input required minLength={2} maxLength={120} value={name} onChange={event => setName(event.target.value)} /></label><label>Celular<input value={phone} onChange={event => setPhone(event.target.value)} autoComplete="tel" /></label><p className="form-note"><Lock size={13} /> E-mail, status e permissão são controlados pelo sistema.</p><button className="primary-button" disabled={busy}>{busy ? 'Salvando...' : 'Salvar perfil'} <Check size={16} /></button>{message && <div className="form-success">{message}</div>}{error && <div className="form-error">{error}</div>}</form><div className="profile-stats"><div><strong>Dados oficiais</strong><span>pontuação no ranking</span></div><div><strong>Privado</strong><span>sem dados corporais</span></div><div><strong>Seguro</strong><span>RLS ativo</span></div></div><SectionHeading title="Seus badges" action="Ver todos" onClick={() => onNavigate('challenges')} /><div className="badge-grid profile-badges"><Badge icon="🔥" title="Primeiro streak" unlocked /><Badge icon="🚀" title="Virada de jogo" unlocked /><Badge icon="🧭" title="Explorador" unlocked /></div><div className="settings-list"><button onClick={() => onAction('Notificações atualizadas.')}><Bell size={18} /><span>Notificações</span><small>Ativas</small><ChevronRight size={17} /></button><button onClick={() => onNavigate('rules')}><ShieldCheck size={18} /><span>Privacidade e LGPD</span><ChevronRight size={17} /></button></div></> }
+function ProfilePage({ profile, onNavigate, onAction }: { profile: Profile | null; onNavigate: (page: Page) => void; onAction: (message: string) => void }) { const { updateProfile } = useAuth(); const [name, setName] = useState(profile?.full_name ?? ''); const [phone, setPhone] = useState(profile?.phone ?? ''); const [busy, setBusy] = useState(false); const [message, setMessage] = useState(''); const [error, setError] = useState(''); useEffect(() => { setName(profile?.full_name ?? ''); setPhone(profile?.phone ?? '') }, [profile]); const save = async (event: React.FormEvent) => { event.preventDefault(); setBusy(true); setError(''); setMessage(''); const result = await updateProfile({ fullName: name, phone }); setBusy(false); if (result.error) setError(result.error.message); else setMessage('Perfil atualizado.') }; return <><section className="profile-head"><div className="profile-avatar">{profile?.avatar_emoji || '🪩'}<span className="status-check"><Check size={11} /></span></div><div><span className="eyebrow">SEU PERFIL</span><h1>{profile?.full_name ?? 'Seu perfil'}</h1><p>{profile?.email ?? 'Conta autenticada'} · participante {profile?.status === 'pending' ? 'pendente' : 'ativo'}</p></div><button className="icon-button" aria-label="Editar perfil"><MoreHorizontal size={20} /></button></section><form className="form-panel profile-edit-form" onSubmit={save}><label>Nome completo<input required minLength={2} maxLength={120} value={name} onChange={event => setName(event.target.value)} /></label><label>Celular<input value={phone} onChange={event => setPhone(event.target.value)} autoComplete="tel" /></label><p className="form-note"><Lock size={13} /> E-mail, status e permissão são controlados pelo sistema.</p><button className="primary-button" disabled={busy}>{busy ? 'Salvando...' : 'Salvar perfil'} <Check size={16} /></button>{message && <div className="form-success">{message}</div>}{error && <div className="form-error">{error}</div>}</form><div className="profile-stats"><div><strong>Dados oficiais</strong><span>pontuação no ranking</span></div><div><strong>Privado</strong><span>sem dados corporais</span></div><div><strong>Seguro</strong><span>RLS ativo</span></div></div><BaselineCard /><SectionHeading title="Seus badges" action="Ver todos" onClick={() => onNavigate('challenges')} /><div className="badge-grid profile-badges"><Badge icon="🔥" title="Primeiro streak" unlocked /><Badge icon="🚀" title="Virada de jogo" unlocked /><Badge icon="🧭" title="Explorador" unlocked /></div><div className="settings-list"><button onClick={() => onAction('Notificações atualizadas.')}><Bell size={18} /><span>Notificações</span><small>Ativas</small><ChevronRight size={17} /></button><button onClick={() => onNavigate('rules')}><ShieldCheck size={18} /><span>Privacidade e LGPD</span><ChevronRight size={17} /></button></div></> }
 
 function RulesPage() { return <><PageTitle eyebrow="MANUAL MOVE" title="O jogo é consistência." detail="Regras claras para uma competição leve, justa e divertida." /><div className="rules-intro"><Target size={22} /><p>A meta não é ser o mais intenso. É aparecer por você, um dia de cada vez.</p></div><RuleBlock title="Temporada" text="Cada temporada dura 8 semanas. A Semana 0 é dedicada ao onboarding e à definição do seu baseline. O 7º dia de cada semana é descanso e não pontua." /><RuleBlock title="Meta diária" text="Complete 30 minutos de atividade contínua ou alcance 8.000 passos. Você tem até 6 dias pontuáveis por semana." /><RuleBlock title="Como a pontuação é calculada" text="Consistência: 10 pontos por dia completo, até 60 por semana, mais 15 pontos ao completar 5 dias ou mais. Evolução: 1 ponto a cada 2% de melhoria contra seu baseline, até 25 pontos. Volume: 1 ponto a cada 40 MET-min, até 20 pontos. O teto semanal é 120 pontos." /><RuleBlock title="Duelos" text="Você pode desafiar um participante por semana, sempre nos quatro primeiros dias. A pessoa tem 24 horas para aceitar ou recusar, sem penalidade se recusar. Vence quem concluir mais dias na semana; empate desempata por consistência e depois por volume. O vencedor ganha pontos que somam por fora do teto semanal. No máximo dois duelos com a mesma pessoa por temporada." /><RuleBlock title="Prêmios e acúmulo" text="O valor arrecadado é dividido entre campeão, segundo, terceiro, maior evolução e um rateio entre quem mantiver a consistência mínima. As categorias acumulam: quem for campeão e também tiver a maior evolução recebe as duas fatias, e quem está no pódio continua entrando no rateio de consistência. O melhor desempenho é premiado por inteiro, sem prêmio de consolo." /><RuleBlock title="Coringas" text="Você recebe 2 coringas por temporada. Use um para neutralizar um dia perdido sem quebrar seu streak. Coringas não geram pontos, apenas protegem sua consistência." /><RuleBlock title="Jogo limpo e privacidade" text="O ranking nunca usa peso, IMC, gordura corporal, medidas ou aparência. Dados são usados apenas para autenticação, competição e comunicação. No modo Supabase, o cálculo final deve ser validado no servidor via RPC ou Edge Function, com baseline congelado, timestamp, janela de edição e trilha de auditoria." /></> }
 function RuleBlock({ title, text }: { title: string; text: string }) { return <article className="rule-block"><span className="rule-number">{title.slice(0, 1)}</span><div><h2>{title}</h2><p>{text}</p></div></article> }
