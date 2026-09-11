@@ -259,12 +259,25 @@ function SectionHeading({ title, action, onClick }: { title: string; action?: st
 
 type ScoreRow = { user_id: string; consistency_points: number; evolution_points: number; volume_points: number; bonus_points: number; completed_days: number; total_points: number; profiles?: { full_name: string } | null }
 
+type Nudge = { kind: string | null; tone?: string; text?: string }
+
+function NudgeBanner() {
+  const [nudge, setNudge] = useState<Nudge | null>(null)
+  useEffect(() => {
+    if (!supabase) return
+    supabase.rpc('my_nudge').then(({ data, error }) => { if (!error) setNudge(data as Nudge) })
+  }, [])
+  if (!nudge?.text) return null
+  return <div className={`nudge nudge-${nudge.kind} tone-${nudge.tone ?? 'mid'}`}>{nudge.text}</div>
+}
+
 function HomePage({ userId, onNavigate, onRegister, done }: { userId: string; onNavigate: (page: Page) => void; onRegister: () => void; done: boolean }) {
   const [score, setScore] = useState({ points: 0, consistency: 0, evolution: 0, volume: 0, position: 0, total: 0, completedDays: 0 })
   const [seasonName, setSeasonName] = useState('')
   useEffect(() => { if (!supabase) return; const load = async () => { const { data: seasons } = await supabase.from('seasons').select('id, name, start_date, end_date, status').in('status', ['registration', 'active']).order('start_date', { ascending: false }); const today = new Date().toISOString().slice(0, 10); const season = (seasons ?? []).find(item => item.start_date <= today && item.end_date >= today) as { id: string; name: string } | undefined; if (!season) return; setSeasonName(season.name); const { data } = await supabase.from('weekly_scores').select('user_id, consistency_points, evolution_points, volume_points, bonus_points, completed_days, total_points').eq('season_id', season.id); const rows = (data ?? []) as ScoreRow[]; const totals = new Map<string, ScoreRow>(); rows.forEach(row => { const existing = totals.get(row.user_id) ?? { ...row, consistency_points: 0, evolution_points: 0, volume_points: 0, bonus_points: 0, completed_days: 0, total_points: 0 }; existing.consistency_points += Number(row.consistency_points); existing.evolution_points += Number(row.evolution_points); existing.volume_points += Number(row.volume_points); existing.bonus_points += Number(row.bonus_points); existing.completed_days += Number(row.completed_days); existing.total_points += Number(row.total_points); totals.set(row.user_id, existing) }); const ordered = [...totals.values()].sort((a, b) => b.total_points - a.total_points); const mine = totals.get(userId); setScore({ points: mine?.total_points ?? 0, consistency: mine?.consistency_points ?? 0, evolution: mine?.evolution_points ?? 0, volume: mine?.volume_points ?? 0, position: mine ? ordered.findIndex(row => row.user_id === userId) + 1 : 0, total: ordered.length, completedDays: mine?.completed_days ?? 0 }) }; load() }, [userId])
   const progress = done || score.completedDays > 0 ? 100 : 0
   return <>
+    <NudgeBanner />
     <section className="hero"><div className="hero-copy"><span className="eyebrow">{new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' }).toUpperCase()}{seasonName ? ` · ${seasonName}` : ''}</span><h1>Consistência que<br /><em>transforma.</em></h1><p>Você não compete contra o corpo do outro.<br />Compete contra sua versão de ontem.</p></div><div className="hero-orbit"><div className="orbit-ring" /><div className="hero-emoji">🪩</div><span className="orbit-star star-one">✦</span><span className="orbit-star star-two">✧</span></div></section>
     <section className="stats-grid"><Stat icon={<Trophy />} label="posição" value={score.position ? `#${score.position}` : '-'} accent="violet" /><Stat icon={<Zap />} label="pontos" value={score.points.toLocaleString('pt-BR')} accent="cyan" /><Stat icon={<Flame />} label="dias concluídos" value={String(score.completedDays)} accent="orange" /></section>
     <section className={`today-card ${progress === 100 ? 'completed' : ''}`}><div className="today-top"><div><span className="eyebrow">META DE HOJE</span><h2>{progress === 100 ? 'Meta batida!' : 'Seu próximo movimento'}</h2></div><div className="progress-ring"><span>{progress}<small>%</small></span></div></div><div className="progress-line"><span style={{ width: `${progress}%` }} /></div><div className="today-bottom"><span><Footprints size={16} /> {progress === 100 ? '30 min completos' : 'Comece uma atividade'}</span><button className="primary-button compact" onClick={onRegister}>{progress === 100 ? 'Registrar mais' : 'Registrar atividade'} <ArrowUpRight size={16} /></button></div></section>

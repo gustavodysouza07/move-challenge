@@ -47,3 +47,22 @@ input,select,textarea{font-size:16px}
 .baseline-fields{border:1px dashed #4e4770;background:#211b40;border-radius:12px;padding:15px;margin:20px 0}
 .baseline-fields .eyebrow{display:block;margin-bottom:8px}
 .baseline-fields .submit-hint{margin:0 0 14px}
+.admin-tabs{flex-wrap:wrap;overflow:visible;gap:8px}
+.admin-tabs button{flex:none;white-space:nowrap}
+@media (max-width:700px){
+  .admin-tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .admin-tabs::-webkit-scrollbar{display:none}
+}
+.nudge{border:1px solid var(--line);border-radius:13px;padding:14px 16px;margin:22px 0 4px;font-size:13px;line-height:1.5;background:#1b1830;color:#ded9ef}
+.nudge-streak{border-color:#7a4a4a;background:#2e1e28;color:#ffc9c9}
+.nudge-duel{border-color:#5b4aa8;background:#241f47;color:#d6c8ff}
+.nudge-ranking{border-color:#8a6f2e;background:#2d2618;color:#ffe6a2}
+.nudge-done,.nudge-week{border-color:#2f7a6e;background:#152e2c;color:#a9f5e8}
+.nudge-comeback{border-color:#4a5a7a;background:#1b2233;color:#c6d5f0}
+
+.admin-tabs{flex-wrap:wrap;overflow:visible;gap:8px}
+.admin-tabs button{flex:none;white-space:nowrap}
+@media (max-width:700px){
+  .admin-tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .admin-tabs::-webkit-scrollbar{display:none}
+}
