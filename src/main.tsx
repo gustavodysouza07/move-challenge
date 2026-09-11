@@ -37,7 +37,7 @@ const metValues: Record<ActivityType, number> = {
 
 const navItems: { id: Page; label: string; icon: typeof Home }[] = [
   { id: 'home', label: 'Home', icon: Home }, { id: 'ranking', label: 'Ranking', icon: Trophy },
-  { id: 'register', label: 'Registrar', icon: Plus }, { id: 'activities', label: 'Minhas atividades', icon: History }, { id: 'challenges', label: 'Duelos', icon: Swords },
+  { id: 'register', label: 'Registrar', icon: Play }, { id: 'activities', label: 'Minhas atividades', icon: History }, { id: 'challenges', label: 'Duelos', icon: Swords },
   { id: 'profile', label: 'Perfil', icon: UserRound },
 ]
 
@@ -100,7 +100,7 @@ function App() {
 
     <main className="content">{page === 'home' && <HomePage userId={user.id} onNavigate={go} onRegister={() => setShowRegister(true)} done={activityDone} />}{page === 'ranking' && <RankingPage userId={user.id} />}{page === 'register' && <RegisterPage onCancelled={() => { setActiveSession(null); setCompletedSession(null) }} activeSession={activeSession} completedSession={completedSession} onStarted={setActiveSession} onCompleted={session => { setActiveSession(null); setCompletedSession(session) }} onDone={(session) => { setCompletedSession(null); setActivityDone(true); notify(`Atividade de ${formatDuration(session.duration_seconds ?? 0)} enviada para validação.`); go('home') }} />}{page === 'activities' && <ActivityHistoryPage userId={user.id} />}{page === 'challenges' && <DuelsPage userId={user.id} onAction={notify} />}{page === 'groups' && <GroupsPage userId={user.id} onAction={notify} />}{page === 'profile' && <ProfilePage profile={profile} onNavigate={go} onAction={notify} />}{page === 'rules' && <RulesPage />}{page === 'privacy' && <PrivacyPage />}{page === 'enrollment' && <EnrollmentPage />}{page === 'admin' && (profile?.role === 'admin' ? <AdminWorkspace /> : <AccessState title="Área restrita" detail="Apenas administradores podem acessar este espaço." onAction={() => go('home')} action="Voltar" />)}</main>
 
-    <nav className="bottom-nav">{navItems.map(({ id, label, icon: Icon }) => <button key={id} className={page === id ? 'active' : ''} onClick={() => id === 'register' ? setShowRegister(true) : go(id)}><span className="nav-icon"><Icon size={20} strokeWidth={page === id ? 2.5 : 1.8} />{id === 'register' && <span className="nav-plus">+</span>}</span><span>{label}</span></button>)}</nav>
+    <nav className="bottom-nav">{navItems.map(({ id, label, icon: Icon }) => <button key={id} className={page === id ? 'active' : ''} onClick={() => id === 'register' ? setShowRegister(true) : go(id)}><span className="nav-icon"><Icon size={20} strokeWidth={page === id ? 2.5 : 1.8} /></span><span>{label}</span></button>)}</nav>
     {(showRegister || activeSession || completedSession) && <RegisterModal onCancelled={() => { setActiveSession(null); setCompletedSession(null); setShowRegister(false) }} season={currentSeason} activeSession={activeSession} completedSession={completedSession} onClose={() => { setShowRegister(false); setCompletedSession(null) }} onStarted={setActiveSession} onCompleted={session => { setActiveSession(null); setCompletedSession(session) }} onDone={(session) => { setActiveSession(null); setCompletedSession(null); setActivityDone(true); setShowRegister(false); notify(`Atividade de ${formatDuration(session.duration_seconds ?? 0)} enviada para validação.`) }} />}
     {toast && <div className="toast"><Check size={17} /> {toast}</div>}
   </div>
