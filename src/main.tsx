@@ -24,7 +24,7 @@ import { AuthProvider, useAuth, type Profile } from './lib/auth'
 import { supabase } from './lib/supabase'
 import './styles.css'
 
-type Page = 'home' | 'ranking' | 'register' | 'activities' | 'challenges' | 'groups' | 'profile' | 'rules' | 'privacy' | 'admin' | 'enrollment'
+type Page = 'home' | 'ranking' | 'register' | 'activities' | 'challenges' | 'groups' | 'profile' | 'rules' | 'privacy' | 'faq' | 'admin' | 'enrollment'
 type ActivityType = 'Caminhada leve' | 'Caminhada rápida / inclinação' | 'Musculação moderada' | 'Musculação pesada' | 'Bike / spinning' | 'Natação' | 'Corrida' | 'Funcional / HIIT' | 'Yoga / alongamento'
 type ActivitySession = { id: string; activity_type: ActivityType; started_at: string; ended_at: string | null; status: 'active' | 'pending_validation' | 'validated' | 'rejected' | 'completed' | 'cancelled'; duration_seconds: number | null; paused_seconds?: number }
 type CurrentSeason = { id: string; name: string; start_date: string; end_date: string; status: 'registration' | 'active' }
@@ -96,9 +96,9 @@ function App() {
       <button className="season-pill" onClick={() => go('enrollment')}><span className="live-dot" /> {currentSeason?.name ?? 'Nenhuma temporada disponível'} <ChevronRight size={13} /></button>
       <div className="top-actions"><button className="icon-button" onClick={() => notify('Você está em dia!')} aria-label="Notificações"><Bell size={19} /><span className="notification-dot" /></button><button className="avatar-button" onClick={() => go('profile')}>{profile?.avatar_emoji || '🪩'}</button><button className="icon-button menu-button" onClick={() => setMenuOpen(!menuOpen)} aria-label="Abrir menu"><Menu size={20} /></button></div>
     </header>
-    {menuOpen && <div className="quick-menu"><button onClick={() => go('rules')}><BookOpen size={17} /> Como pontua</button><button onClick={() => go('groups')}><Users size={17} /> Meus grupos</button><button onClick={() => go('privacy')}><ShieldCheck size={17} /> Privacidade</button>{profile?.role === 'admin' && <button onClick={() => go('admin')}><ShieldCheck size={17} /> Admin</button>}<button onClick={() => notify('Tudo certo: seus dados estão protegidos.')}><ShieldCheck size={17} /> Privacidade</button><button onClick={() => signOut()}><Lock size={17} /> Sair</button></div>}
+    {menuOpen && <div className="quick-menu"><button onClick={() => go('rules')}><BookOpen size={17} /> Como pontua</button><button onClick={() => go('groups')}><Users size={17} /> Meus grupos</button><button onClick={() => go('faq')}><CircleHelp size={17} /> Perguntas frequentes</button><button onClick={() => go('privacy')}><ShieldCheck size={17} /> Privacidade</button>{profile?.role === 'admin' && <button onClick={() => go('admin')}><ShieldCheck size={17} /> Admin</button>}<button onClick={() => notify('Tudo certo: seus dados estão protegidos.')}><ShieldCheck size={17} /> Privacidade</button><button onClick={() => signOut()}><Lock size={17} /> Sair</button></div>}
 
-    <main className="content">{page === 'home' && <HomePage userId={user.id} onNavigate={go} onRegister={() => setShowRegister(true)} done={activityDone} />}{page === 'ranking' && <RankingPage userId={user.id} />}{page === 'register' && <RegisterPage onCancelled={() => { setActiveSession(null); setCompletedSession(null) }} activeSession={activeSession} completedSession={completedSession} onStarted={setActiveSession} onCompleted={session => { setActiveSession(null); setCompletedSession(session) }} onDone={(session) => { setCompletedSession(null); setActivityDone(true); notify(`Atividade de ${formatDuration(session.duration_seconds ?? 0)} enviada para validação.`); go('home') }} />}{page === 'activities' && <ActivityHistoryPage userId={user.id} />}{page === 'challenges' && <DuelsPage userId={user.id} onAction={notify} />}{page === 'groups' && <GroupsPage userId={user.id} onAction={notify} />}{page === 'profile' && <ProfilePage profile={profile} onNavigate={go} onAction={notify} />}{page === 'rules' && <RulesPage />}{page === 'privacy' && <PrivacyPage />}{page === 'enrollment' && <EnrollmentPage />}{page === 'admin' && (profile?.role === 'admin' ? <AdminWorkspace /> : <AccessState title="Área restrita" detail="Apenas administradores podem acessar este espaço." onAction={() => go('home')} action="Voltar" />)}</main>
+    <main className="content">{page === 'home' && <HomePage userId={user.id} onNavigate={go} onRegister={() => setShowRegister(true)} done={activityDone} />}{page === 'ranking' && <RankingPage userId={user.id} />}{page === 'register' && <RegisterPage onCancelled={() => { setActiveSession(null); setCompletedSession(null) }} activeSession={activeSession} completedSession={completedSession} onStarted={setActiveSession} onCompleted={session => { setActiveSession(null); setCompletedSession(session) }} onDone={(session) => { setCompletedSession(null); setActivityDone(true); notify(`Atividade de ${formatDuration(session.duration_seconds ?? 0)} enviada para validação.`); go('home') }} />}{page === 'activities' && <ActivityHistoryPage userId={user.id} />}{page === 'challenges' && <DuelsPage userId={user.id} onAction={notify} />}{page === 'groups' && <GroupsPage userId={user.id} onAction={notify} />}{page === 'profile' && <ProfilePage profile={profile} onNavigate={go} onAction={notify} />}{page === 'rules' && <RulesPage />}{page === 'privacy' && <PrivacyPage />}{page === 'faq' && <FaqPage />}{page === 'enrollment' && <EnrollmentPage />}{page === 'admin' && (profile?.role === 'admin' ? <AdminWorkspace /> : <AccessState title="Área restrita" detail="Apenas administradores podem acessar este espaço." onAction={() => go('home')} action="Voltar" />)}</main>
 
     <nav className="bottom-nav">{navItems.map(({ id, label, icon: Icon }) => <button key={id} className={page === id ? 'active' : ''} onClick={() => id === 'register' ? setShowRegister(true) : go(id)}><span className="nav-icon"><Icon size={20} strokeWidth={page === id ? 2.5 : 1.8} /></span><span>{label}</span></button>)}</nav>
     {(showRegister || activeSession || completedSession) && <RegisterModal onCancelled={() => { setActiveSession(null); setCompletedSession(null); setShowRegister(false) }} season={currentSeason} activeSession={activeSession} completedSession={completedSession} onClose={() => { setShowRegister(false); setCompletedSession(null) }} onStarted={setActiveSession} onCompleted={session => { setActiveSession(null); setCompletedSession(session) }} onDone={(session) => { setActiveSession(null); setCompletedSession(null); setActivityDone(true); setShowRegister(false); notify(`Atividade de ${formatDuration(session.duration_seconds ?? 0)} enviada para validação.`) }} />}
@@ -1310,6 +1310,94 @@ function RulesPage() {
     <RuleBlock title="Prêmios e acúmulo" text={`O valor arrecadado é dividido assim: ${pct('champion_percent', 40)}% para o campeão, ${pct('second_percent', 20)}% para o segundo, ${pct('third_percent', 10)}% para o terceiro, ${pct('evolution_percent', 15)}% para quem mais evoluiu e ${pct('consistency_percent', 15)}% rateados entre quem fechar pelo menos ${pct('min_consistency_percent', 80)}% dos dias. As categorias acumulam: quem for campeão e também tiver a maior evolução recebe as duas fatias, e quem está no pódio continua entrando no rateio. O melhor desempenho é premiado por inteiro, sem prêmio de consolo.`} />
 
     <RuleBlock title="Jogo limpo" text="O ranking nunca usa peso, IMC, gordura corporal, medidas ou aparência. Toda pontuação é calculada no servidor a partir de atividades validadas, com registro de quem aprovou o quê. Comprovante é obrigatório e o histórico fica disponível para consulta." />
+  </>
+}
+
+const faqSections: Array<{ title: string; items: Array<{ q: string; a: string }> }> = [
+  {
+    title: 'Começando',
+    items: [
+      { q: 'Como entro na temporada?', a: 'Toque no nome da temporada no topo da tela. Você informa seu ponto de partida, faz o PIX no valor indicado, anexa o comprovante e espera a organização aprovar. Enquanto não for aprovado, você não consegue registrar atividade.' },
+      { q: 'O que é o ponto de partida?', a: 'É a sua média de minutos de atividade e de passos por dia antes da temporada começar. Sua evolução é medida contra esse número, ou seja, você compete contra a sua própria versão anterior. Ele é congelado pela organização e não pode ser alterado depois.' },
+      { q: 'Preciso informar peso ou medidas?', a: 'Não. Peso, altura, IMC, gordura corporal, medidas e fotos de corpo não são pedidos, não são guardados e não entram em nenhum cálculo.' },
+      { q: 'Meu PIX foi recusado. E agora?', a: 'Abra a tela da temporada, confira o valor e a chave, refaça o pagamento e anexe o novo comprovante. A inscrição volta para análise automaticamente.' },
+    ],
+  },
+  {
+    title: 'Registrando atividade',
+    items: [
+      { q: 'Como registro uma atividade?', a: 'Toque no botão de play na barra de baixo, escolha o tipo de atividade e inicie. O tempo é contado pelo servidor, então você pode fechar o app, bloquear a tela ou usar outros aplicativos que a contagem continua correta.' },
+      { q: 'Posso pausar no meio?', a: 'Pode. O tempo pausado não entra na duração, e você retoma quando quiser. Se esquecer pausado e finalizar, o app fecha a pausa sozinho e desconta o tempo parado.' },
+      { q: 'Por que preciso anexar comprovante?', a: 'É o que mantém a competição justa, já que tem dinheiro envolvido. Vale print do relógio, do app de treino, foto do painel da esteira — qualquer coisa que mostre a atividade. JPG, PNG ou PDF de até 5 MB.' },
+      { q: 'Esqueci o cronômetro rodando. O que faço?', a: 'Use o botão "Descartar atividade" na sessão em andamento. Só pode existir uma sessão ativa por vez, então descartar é o que libera você para começar outra.' },
+      { q: 'Quando os pontos aparecem?', a: 'Depois que a organização validar a atividade. Até lá ela fica como "aguardando validação" em Minhas atividades. A data que conta é a do treino, não a da aprovação.' },
+      { q: 'Bati a meta por passos mas treinei menos de 30 minutos. Conta?', a: 'Conta. A meta é atingida de duas formas: pelo tempo ou pelos passos. Informe o número de passos no momento de enviar a atividade para validação.' },
+    ],
+  },
+  {
+    title: 'Pontuação',
+    items: [
+      { q: 'Como eu pontuo?', a: 'Consistência é o principal: pontos por cada dia em que você bate a meta, mais um bônus se fechar a semana com vários dias. Evolução premia melhorar em relação ao seu ponto de partida. Volume considera a intensidade e a duração. Os valores exatos estão na tela de Regras, porque podem mudar de uma temporada para outra.' },
+      { q: 'Treinei duas vezes no mesmo dia. Vale o dobro?', a: 'Em consistência não — um dia é um dia. Mas o volume das duas atividades soma, até o teto diário.' },
+      { q: 'Existe dia de descanso?', a: 'Sim. Cada semana tem 6 dias que pontuam; o sétimo não conta e não prejudica ninguém.' },
+      { q: 'O que é o coringa?', a: 'Você tem 2 por temporada. Ele protege um dia que você perdeu: conta como dia presente para o bônus da semana e para a consistência que dá direito ao rateio do prêmio, mas não gera pontos. Vale só para os últimos 7 dias e não vale em duelo. Fica no seu Perfil.' },
+    ],
+  },
+  {
+    title: 'Duelos',
+    items: [
+      { q: 'Como funciona um duelo?', a: 'Você desafia uma pessoa para a semana corrente. Ela tem 24 horas para aceitar ou recusar. Vence quem concluir mais dias naquela semana; empate desempata por consistência e depois por volume. O vencedor ganha pontos que somam por fora do teto semanal.' },
+      { q: 'Por que não consigo desafiar ninguém?', a: 'Duelos só podem ser propostos nos quatro primeiros dias da semana, para sobrar tempo de competir. Também não dá se você já tiver um duelo na semana, se a pessoa já estiver em outro, ou se vocês já duelaram duas vezes na temporada.' },
+      { q: 'Aceitei e não vou conseguir treinar. Posso sair?', a: 'Pode. Use "Desistir" no duelo em andamento. O adversário vence na hora e recebe os pontos, e a desistência fica registrada no histórico dos dois.' },
+      { q: 'O placar do duelo está parado. É bug?', a: 'O placar conta apenas atividades já validadas. Se você treinou e a aprovação ainda não saiu, o dia ainda vai contar, mas só aparece depois que a organização validar.' },
+    ],
+  },
+  {
+    title: 'Grupos',
+    items: [
+      { q: 'Para que serve um grupo?', a: 'Para acompanhar de perto quem você conhece: família, colegas de trabalho, amigos. É um recorte do ranking, nada mais. A temporada, o valor e a premiação continuam sendo os mesmos para todo mundo.' },
+      { q: 'Como chamo alguém para o meu grupo?', a: 'Crie o grupo em Meus grupos, no menu. Ele gera um código de 6 caracteres. Toque em "Convidar" para compartilhar direto pelo WhatsApp com a mensagem pronta, ou passe o código na mão. A pessoa digita o código no campo "Entrar com código" e pronto.' },
+      { q: 'Preciso pagar de novo para entrar num grupo?', a: 'Não. Grupo não tem taxa, não tem prêmio próprio e não altera nada da sua inscrição.' },
+      { q: 'De quantos grupos posso participar?', a: 'De até 5 ao mesmo tempo, com até 50 pessoas em cada. Grupos continuam existindo de uma temporada para outra.' },
+      { q: 'Quem sai do grupo perde alguma coisa?', a: 'Nada. Sua pontuação é da temporada, não do grupo. Se o último membro sair, o grupo deixa de existir.' },
+    ],
+  },
+  {
+    title: 'Prêmios',
+    items: [
+      { q: 'Como o dinheiro é dividido?', a: 'Entre campeão, segundo, terceiro, quem mais evoluiu, e um rateio entre todos que mantiverem a consistência mínima. Os percentuais exatos aparecem na tela de Regras.' },
+      { q: 'Dá para ganhar em mais de uma categoria?', a: 'Dá, e é proposital. Quem for campeão e também tiver a maior evolução recebe as duas fatias, e quem está no pódio continua entrando no rateio de consistência. O melhor desempenho é premiado por inteiro.' },
+      { q: 'Onde vejo o resultado final?', a: 'Na aba Ranking, em "Temporadas encerradas". Assim que a organização publica, todo mundo vê quanto foi arrecadado, quem recebeu quanto e a classificação completa.' },
+    ],
+  },
+  {
+    title: 'Conta e app',
+    items: [
+      { q: 'Como troco meu emoji?', a: 'No Perfil, toque nos três pontinhos ao lado do seu nome e escolha "Trocar emoji". Você pode digitar ou colar qualquer emoji, não só os sugeridos.' },
+      { q: 'O app não está atualizando no celular.', a: 'Feche o app completamente e abra de novo. Se persistir, remova da tela inicial e adicione outra vez.' },
+      { q: 'Meus dados estão seguros?', a: 'A página Privacidade e LGPD, no menu, explica exatamente o que é coletado, quem vê o quê e como pedir exclusão.' },
+    ],
+  },
+]
+
+function FaqPage() {
+  const [open, setOpen] = useState('')
+  return <>
+    <PageTitle eyebrow="AJUDA" title="Perguntas frequentes." detail="Se a sua dúvida não estiver aqui, fale com quem organiza a temporada." />
+    {faqSections.map(section => <section className="admin-review" key={section.title}>
+      <SectionHeading title={section.title} />
+      <div className="admin-review-list">{section.items.map(item => {
+        const id = `${section.title}-${item.q}`
+        const isOpen = open === id
+        return <div key={id}>
+          <button className="result-head" onClick={() => setOpen(isOpen ? '' : id)}>
+            <div><strong>{item.q}</strong></div>
+            <ChevronRight size={18} className={isOpen ? 'result-arrow open' : 'result-arrow'} />
+          </button>
+          {isOpen && <div className="result-body"><p className="faq-answer">{item.a}</p></div>}
+        </div>
+      })}</div>
+    </section>)}
   </>
 }
 

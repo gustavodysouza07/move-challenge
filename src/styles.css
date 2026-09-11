@@ -88,3 +88,5 @@ input,select,textarea{font-size:16px}
 .baseline-readout strong{display:block;margin-top:6px;font:600 20px 'Space Grotesk';color:#f3f1ff}
 .tab-bar button:nth-child(3) .nav-icon{width:42px;height:42px;display:grid;place-items:center;border-radius:100px;background:linear-gradient(135deg,var(--purple),#4d7dff);color:#fff;margin-bottom:-4px;box-shadow:0 4px 14px #6a5cff40}
 .tab-bar button:nth-child(3) .nav-icon svg{stroke-width:2.4}
+.faq-answer{font-size:12px;line-height:1.65;color:#beb8d0;margin:0;padding:4px 0 6px}
+.result-head div strong{display:block}
