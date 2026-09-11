@@ -508,7 +508,7 @@ function GroupsPage({ userId, onAction }: { userId: string; onAction: (message: 
   }
 
   const share = (group: GroupRow) => {
-    const text = `Entra no meu grupo "${group.name}" no MOVE. Código: ${group.invite_code}`
+    const text = `Entra no meu grupo "${group.name}" no MOVE 💪\nAcesse move-challenge-tau.vercel.app, vá no menu ☰ → Meus grupos e use o código: ${group.invite_code}`
     if (navigator.share) navigator.share({ text }).catch(() => undefined)
     else navigator.clipboard?.writeText(text).then(() => onAction('Convite copiado.')).catch(() => undefined)
   }
