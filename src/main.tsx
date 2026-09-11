@@ -828,9 +828,9 @@ function BaselineCard() {
     <SectionHeading title="Seu ponto de partida" />
     <div className="form-panel">
       <p className="submit-hint">A evolução compara você com você mesmo. Informe como estava sua rotina nas duas semanas anteriores a {new Date(`${info.season.start_date}T12:00:00`).toLocaleDateString('pt-BR')}. Nada aqui envolve peso, medidas ou aparência.</p>
-      <div className="form-row">
-        <label>Minutos de atividade por dia<input type="number" min={0} max={480} disabled={frozen || busy} value={minutes} onChange={event => { setMinutes(event.target.value); setError('') }} placeholder="ex.: 20" /></label>
-        <label>Passos por dia<input type="number" min={0} max={100000} disabled={frozen || busy} value={steps} onChange={event => { setSteps(event.target.value); setError('') }} placeholder="ex.: 4500" /></label>
+      <div className="baseline-readout">
+        <div><span className="eyebrow">MINUTOS POR DIA</span><strong>{info.baseline ? info.baseline.average_active_minutes : '—'}</strong></div>
+        <div><span className="eyebrow">PASSOS POR DIA</span><strong>{info.baseline ? Number(info.baseline.average_steps).toLocaleString('pt-BR') : '—'}</strong></div>
       </div>
       <p className="form-note"><Lock size={13} /> {frozen ? `Congelado em ${new Date(info.baseline!.frozen_at!).toLocaleDateString('pt-BR')}.` : 'Informado na inscrição.'} Este número não pode ser alterado — fale com a organização se estiver errado.</p>
       {error && <div className="form-error">{error}</div>}
@@ -1159,13 +1159,50 @@ function AdminSettings() {
 
 function Badge({ icon, title, unlocked = false }: { icon: string; title: string; unlocked?: boolean }) { return <div className={`badge ${unlocked ? 'unlocked' : ''}`}><span>{unlocked ? icon : '◌'}</span><strong>{title}</strong>{unlocked && <small>conquistado</small>}</div> }
 
-function ProfilePage({ profile, onNavigate, onAction }: { profile: Profile | null; onNavigate: (page: Page) => void; onAction: (message: string) => void }) { const { updateProfile } = useAuth(); const [name, setName] = useState(profile?.full_name ?? ''); const [phone, setPhone] = useState(profile?.phone ?? ''); const [busy, setBusy] = useState(false); const [message, setMessage] = useState(''); const [error, setError] = useState(''); useEffect(() => { setName(profile?.full_name ?? ''); setPhone(profile?.phone ?? '') }, [profile]); const save = async (event: React.FormEvent) => { event.preventDefault(); setBusy(true); setError(''); setMessage(''); const result = await updateProfile({ fullName: name, phone }); setBusy(false); if (result.error) setError(result.error.message); else setMessage('Perfil atualizado.') }; return <><section className="profile-head"><div className="profile-avatar">{profile?.avatar_emoji || '🪩'}<span className="status-check"><Check size={11} /></span></div><div><span className="eyebrow">SEU PERFIL</span><h1>{profile?.full_name ?? 'Seu perfil'}</h1><p>{profile?.email ?? 'Conta autenticada'} · participante {profile?.status === 'pending' ? 'pendente' : 'ativo'}</p></div><button className="icon-button" aria-label="Editar perfil"><MoreHorizontal size={20} /></button></section><form className="form-panel profile-edit-form" onSubmit={save}><label>Nome completo<input required minLength={2} maxLength={120} value={name} onChange={event => setName(event.target.value)} /></label><label>Celular<input value={phone} onChange={event => setPhone(event.target.value)} autoComplete="tel" /></label><p className="form-note"><Lock size={13} /> E-mail, status e permissão são controlados pelo sistema.</p><button className="primary-button" disabled={busy}>{busy ? 'Salvando...' : 'Salvar perfil'} <Check size={16} /></button>{message && <div className="form-success">{message}</div>}{error && <div className="form-error">{error}</div>}</form><div className="profile-stats"><div><strong>Dados oficiais</strong><span>pontuação no ranking</span></div><div><strong>Privado</strong><span>sem dados corporais</span></div><div><strong>Seguro</strong><span>RLS ativo</span></div></div><BaselineCard /><WildcardsCard /><SectionHeading title="Seus badges" action="Ver todos" onClick={() => onNavigate('challenges')} /><div className="badge-grid profile-badges"><Badge icon="🔥" title="Primeiro streak" unlocked /><Badge icon="🚀" title="Virada de jogo" unlocked /><Badge icon="🧭" title="Explorador" unlocked /></div><div className="settings-list"><button onClick={() => onAction('Notificações atualizadas.')}><Bell size={18} /><span>Notificações</span><small>Ativas</small><ChevronRight size={17} /></button><button onClick={() => onNavigate('privacy')}><ShieldCheck size={18} /><span>Privacidade e LGPD</span><ChevronRight size={17} /></button></div></> }
+function ProfilePage({ profile, onNavigate, onAction }: { profile: Profile | null; onNavigate: (page: Page) => void; onAction: (message: string) => void }) { const { updateProfile } = useAuth(); const [name, setName] = useState(profile?.full_name ?? ''); const [phone, setPhone] = useState(profile?.phone ?? ''); const [busy, setBusy] = useState(false); const [message, setMessage] = useState(''); const [error, setError] = useState(''); useEffect(() => { setName(profile?.full_name ?? ''); setPhone(profile?.phone ?? '') }, [profile]); const save = async (event: React.FormEvent) => { event.preventDefault(); setBusy(true); setError(''); setMessage(''); const result = await updateProfile({ fullName: name, phone }); setBusy(false); if (result.error) setError(result.error.message); else setMessage('Perfil atualizado.') }; return <><section className="profile-head"><div className="profile-avatar">{profile?.avatar_emoji || '🪩'}<span className="status-check"><Check size={11} /></span></div><div><span className="eyebrow">SEU PERFIL</span><h1>{profile?.full_name ?? 'Seu perfil'}</h1><p>{profile?.email ?? 'Conta autenticada'} · participante {profile?.status === 'pending' ? 'pendente' : 'ativo'}</p></div><button className="icon-button" aria-label="Editar perfil"><MoreHorizontal size={20} /></button></section><form className="form-panel profile-edit-form" onSubmit={save}><label>Nome completo<input required minLength={2} maxLength={120} value={name} onChange={event => setName(event.target.value)} /></label><label>Celular<input value={phone} onChange={event => setPhone(event.target.value)} autoComplete="tel" /></label><p className="form-note"><Lock size={13} /> E-mail, status e permissão são controlados pelo sistema.</p><button className="primary-button" disabled={busy}>{busy ? 'Salvando...' : 'Salvar perfil'} <Check size={16} /></button>{message && <div className="form-success">{message}</div>}{error && <div className="form-error">{error}</div>}</form><div className="profile-stats"><div><strong>Dados oficiais</strong><span>pontuação no ranking</span></div><div><strong>Privado</strong><span>sem dados corporais</span></div><div><strong>Seguro</strong><span>RLS ativo</span></div></div><BaselineCard /><WildcardsCard /><BadgesCard /><div className="settings-list"><button onClick={() => onAction('Notificações atualizadas.')}><Bell size={18} /><span>Notificações</span><small>Ativas</small><ChevronRight size={17} /></button><button onClick={() => onNavigate('privacy')}><ShieldCheck size={18} /><span>Privacidade e LGPD</span><ChevronRight size={17} /></button></div></> }
 
 type WildcardInfo = {
   season: { id: string; name: string } | null
   used: number; remaining: number
   history: Array<{ used_on: string; reason: string }>
   open_days: string[]
+}
+
+type BadgeItem = { code: string; icon: string; name: string; hint: string; current: number; goal: number; earned_at: string | null }
+
+function BadgesCard() {
+  const [badges, setBadges] = useState<BadgeItem[]>([])
+  const [showAll, setShowAll] = useState(false)
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    if (!supabase) { setLoading(false); return }
+    supabase.rpc('my_badges').then(({ data, error }) => {
+      if (!error && data) setBadges(((data as { badges: BadgeItem[] }).badges ?? []))
+      setLoading(false)
+    })
+  }, [])
+
+  const earned = badges.filter(item => item.earned_at)
+  const pending = badges.filter(item => !item.earned_at)
+  const visible = showAll ? badges : [...earned, ...pending].slice(0, 6)
+
+  return <section className="admin-review">
+    <SectionHeading title="Suas medalhas" action={badges.length > 6 ? (showAll ? 'Ver menos' : 'Ver todas') : undefined} onClick={() => setShowAll(value => !value)} />
+    {loading ? <p className="admin-empty">Carregando medalhas...</p> : <>
+      <p className="submit-hint badge-summary">{earned.length} de {badges.length} conquistadas nesta temporada.</p>
+      <div className="badge-grid profile-badges">{visible.map(item => {
+        const done = Boolean(item.earned_at)
+        const pct = item.goal > 0 ? Math.min(100, Math.round((item.current / item.goal) * 100)) : 0
+        return <div className={done ? 'badge-card earned' : 'badge-card locked'} key={item.code}>
+          <span className="badge-icon">{item.icon}</span>
+          <strong>{item.name}</strong>
+          {done
+            ? <small>conquistada em {new Date(item.earned_at!).toLocaleDateString('pt-BR')}</small>
+            : <><small>{item.hint}</small><div className="badge-progress"><span style={{ width: `${pct}%` }} /></div><small className="badge-count">{item.current} de {item.goal}</small></>}
+        </div>
+      })}</div>
+    </>}
+  </section>
 }
 
 function WildcardsCard() {

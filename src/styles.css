@@ -72,3 +72,17 @@ input,select,textarea{font-size:16px}
 .wildcard-count span{font-size:11px;color:var(--muted);margin-left:5px}
 .wildcard-history{margin-top:18px;padding-top:14px;border-top:1px solid #29253d}
 .wildcard-history .eyebrow{display:block;margin-bottom:8px}
+.badge-summary{margin:0 0 14px}
+.badge-card{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;padding:16px 12px;border:1px solid var(--line);border-radius:14px;background:#1b1830}
+.badge-card.locked{opacity:.55}
+.badge-card.locked .badge-icon{filter:grayscale(1)}
+.badge-card.earned{border-color:#2f7a6e;background:#152e2c}
+.badge-icon{font-size:27px;line-height:1}
+.badge-card strong{font-size:12px;color:#f1eff9}
+.badge-card small{font-size:9px;color:var(--muted);line-height:1.4}
+.badge-progress{width:100%;height:4px;border-radius:100px;background:#2b2745;overflow:hidden;margin-top:2px}
+.badge-progress span{display:block;height:100%;background:var(--cyan)}
+.badge-count{color:#8a83a3}
+.baseline-readout{display:flex;gap:12px;margin:4px 0 14px}
+.baseline-readout div{flex:1;padding:13px;border:1px solid var(--line);border-radius:12px;background:#1d1a30}
+.baseline-readout strong{display:block;margin-top:6px;font:600 20px 'Space Grotesk';color:#f3f1ff}
