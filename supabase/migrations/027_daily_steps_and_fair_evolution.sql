@@ -7,12 +7,6 @@
 
 begin;
 
--- ------------------------------------------------ 1. Parâmetros novos
-update public.seasons
-   set rules = coalesce(rules, '{}'::jsonb)
-             || jsonb_build_object('min_baseline_minutes', 10, 'min_baseline_steps', 2000)
- where status = 'draft'
-    or not (rules ? 'min_baseline_minutes');
 
 -- ------------------------------------------------ 2. Passos por dia
 do $$ begin
