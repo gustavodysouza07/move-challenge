@@ -530,49 +530,377 @@ function NudgeBanner() {
   return <div className={`nudge nudge-${nudge.kind} tone-${nudge.tone ?? 'mid'}`}>{nudge.text}</div>
 }
 
-function DailyStepsCard({ season, userId }: { season: CurrentSeason | null; userId: string }) {
+
+
+
+
+function DailyStepsCard({ userId }: { userId: string }) {
+  const [goal, setGoal] = useState(8000)
+  const [seasonId, setSeasonId] = useState<string | null>(null)
+  const [seasonStart, setSeasonStart] = useState<string | null>(null)
+  const [seasonEnd, setSeasonEnd] = useState<string | null>(null)
   const [steps, setSteps] = useState('')
-  const [record, setRecord] = useState<{ steps: number; status: 'pending_validation' | 'validated' | 'rejected'; rejection_reason: string | null } | null>(null)
+  const [savedSteps, setSavedSteps] = useState<number | null>(null)
   const [proof, setProof] = useState<File | null>(null)
-  const [busy, setBusy] = useState(false)
+  const [status, setStatus] = useState<'idle' | 'uploading' | 'pending' | 'validated' | 'rejected'>('idle')
   const [error, setError] = useState('')
-  const today = moveToday()
-  const started = Boolean(season && season.status === 'active' && season.start_date <= today && season.end_date >= today)
-  const currentSteps = record?.steps ?? (steps ? Number(steps) : 0)
-  const progress = Math.min(100, Math.round((currentSteps / 8000) * 100))
 
-  useEffect(() => {
-    if (!supabase || !season || !started) return
-    supabase.from('daily_steps').select('steps, status, rejection_reason').eq('user_id', userId).eq('season_id', season.id).eq('step_date', today).maybeSingle().then(({ data }) => {
-      if (data) {
-        setRecord(data as typeof record)
-        setSteps(String(data.steps))
-      }
-    })
-  }, [userId, season?.id, started, today])
+  const loadSeasonAndSteps = async () => {
+    if (!supabase) return
 
-  const submit = async () => {
-    if (!supabase || !season || !proof) return
-    const value = Number(steps)
-    if (!Number.isInteger(value) || value < 0 || value > 100000) { setError('Informe uma quantidade válida entre 0 e 100.000 passos.'); return }
-    if (!['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(proof.type) || proof.size > 5 * 1024 * 1024) { setError('Envie JPG, PNG, WEBP ou PDF de até 5 MB.'); return }
-    setBusy(true); setError('')
-    const extension = proof.name.split('.').pop()?.toLowerCase() || 'jpg'
-    const path = `${userId}/steps-${Date.now()}.${extension}`
-    const upload = await supabase.storage.from('activity-proofs').upload(path, proof, { upsert: false, contentType: proof.type })
-    if (upload.error) { setBusy(false); setError('Não foi possível enviar o comprovante.'); return }
-    const { data, error: rpcError } = await supabase.rpc('submit_daily_steps', { p_step_date: today, p_steps: value, p_storage_path: path })
-    setBusy(false)
-    if (rpcError) { setError(rpcError.message); return }
-    setRecord(data as typeof record)
-    setProof(null)
+    const today = moveToday()
+
+    const { data: seasons, error: seasonError } = await supabase
+      .from('seasons')
+      .select('id, start_date, end_date, status, rules')
+      .in('status', ['registration', 'active'])
+      .order('start_date', { ascending: true })
+
+    if (seasonError) {
+      setError(seasonError.message)
+      return
+    }
+
+    const list = (seasons ?? []) as Array<{
+      id: string
+      start_date: string
+      end_date: string
+      status: 'registration' | 'active'
+      rules: Record<string, unknown> | null
+    }>
+
+    const season =
+      list.find(item => item.start_date <= today && item.end_date >= today) ??
+      list.find(item => item.status === 'registration' && item.start_date > today) ??
+      null
+
+    if (!season) {
+      setSeasonId(null)
+      setSeasonStart(null)
+      setSeasonEnd(null)
+      setGoal(8000)
+      return
+    }
+
+    setSeasonId(season.id)
+    setSeasonStart(season.start_date)
+    setSeasonEnd(season.end_date)
+
+    const configuredGoal = Number(
+      season.rules?.daily_steps ?? 8000
+    )
+
+    setGoal(
+      Number.isFinite(configuredGoal) && configuredGoal > 0
+        ? configuredGoal
+        : 8000
+    )
+
+    if (season.start_date > today) {
+      setSavedSteps(null)
+      setStatus('idle')
+      return
+    }
+
+    const { data, error: stepsError } = await supabase
+      .from('daily_steps')
+      .select('steps, status')
+      .eq('user_id', userId)
+      .eq('season_id', season.id)
+      .eq('step_date', today)
+      .maybeSingle()
+
+    if (stepsError) {
+      setError(stepsError.message)
+      return
+    }
+
+    if (!data) {
+      setSavedSteps(null)
+      setStatus('idle')
+      return
+    }
+
+    setSavedSteps(Number(data.steps))
+
+    if (data.status === 'validated') {
+      setStatus('validated')
+    } else if (data.status === 'rejected') {
+      setStatus('rejected')
+    } else {
+      setStatus('pending')
+    }
   }
 
-  if (!season) return null
-  if (!started) return <section className="daily-steps-card"><div className="daily-steps-head"><div><span className="eyebrow">PASSOS DO DIA</span><h2>8.000 passos</h2></div><Footprints size={22} /></div><p>A meta de passos ficará disponível a partir de <strong>{new Date(`${season.start_date}T12:00:00`).toLocaleDateString('pt-BR')}</strong>, quando a temporada começar.</p></section>
+  useEffect(() => {
+    loadSeasonAndSteps()
+  }, [userId])
 
-  return <section className="daily-steps-card"><div className="daily-steps-head"><div><span className="eyebrow">PASSOS DO DIA</span><h2>{currentSteps.toLocaleString('pt-BR')} <small>/ 8.000</small></h2></div><Footprints size={22} /></div><div className="progress-line"><span style={{ width: `${progress}%` }} /></div><div className="daily-steps-status">{record?.status === 'validated' ? record.steps >= 8000 ? <strong>✓ Passos validados · +10 pts de consistência</strong> : <strong>✓ Passos validados</strong> : record?.status === 'rejected' ? <strong>Comprovante recusado: {record.rejection_reason || 'envie um novo comprovante.'}</strong> : record?.status === 'pending_validation' ? <strong>Comprovante enviado · aguardando validação</strong> : <span>Registre seus passos e envie o comprovante do dia.</span>}</div>{record?.status !== 'validated' && <div className="daily-steps-form"><input type="number" min={0} max={100000} placeholder="Quantidade de passos" value={steps} onChange={e => { setSteps(e.target.value); setError('') }} /><input type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" onChange={e => { setProof(e.target.files?.[0] ?? null); setError('') }} /><button className="primary-button" disabled={busy || !proof}>{busy ? 'Enviando...' : 'Enviar passos do dia'} <ArrowUpRight size={16} /></button></div>}{error && <div className="form-error">{error}</div>}</section>
+  const current = savedSteps ?? (steps ? Number(steps) : 0)
+
+  const progress = Math.min(
+    100,
+    Math.round((current / goal) * 100)
+  )
+
+  const remaining = Math.max(0, goal - current)
+
+  const submit = async () => {
+    if (!supabase) {
+      setError('Supabase não configurado.')
+      return
+    }
+
+    if (!seasonId || !seasonStart || !seasonEnd) {
+      setError('Nenhuma temporada disponível.')
+      return
+    }
+
+    const today = moveToday()
+
+    if (seasonStart > today) {
+      setError(
+        `A temporada começa em ${new Date(`${seasonStart}T12:00:00`).toLocaleDateString('pt-BR')}.`
+      )
+      return
+    }
+
+    if (seasonEnd < today) {
+      setError('Esta temporada já foi encerrada.')
+      return
+    }
+
+    const value = Number(steps)
+
+    if (!Number.isInteger(value) || value < 0 || value > 100000) {
+      setError('Informe uma quantidade válida de passos.')
+      return
+    }
+
+    if (!proof) {
+      setError('Anexe um comprovante dos seus passos.')
+      return
+    }
+
+    if (proof.size > 5 * 1024 * 1024) {
+      setError('O comprovante deve ter no máximo 5 MB.')
+      return
+    }
+
+    setStatus('uploading')
+    setError('')
+
+    const extension =
+      proof.name.split('.').pop()?.toLowerCase() || 'jpg'
+
+    const storagePath =
+      `${userId}/steps-${Date.now()}.${extension}`
+
+    const { error: uploadError } = await supabase.storage
+      .from('activity-proofs')
+      .upload(storagePath, proof, {
+        upsert: false,
+        contentType: proof.type || undefined,
+      })
+
+    if (uploadError) {
+      setStatus('idle')
+      setError(uploadError.message)
+      return
+    }
+
+    const { data, error: rpcError } = await supabase.rpc(
+      'submit_daily_steps',
+      {
+        p_step_date: today,
+        p_steps: value,
+        p_storage_path: storagePath,
+      }
+    )
+
+    if (rpcError) {
+      setStatus('idle')
+      setError(rpcError.message)
+      return
+    }
+
+    setSavedSteps(
+      Number(data?.steps ?? value)
+    )
+
+    setSteps('')
+    setProof(null)
+    setStatus('pending')
+  }
+
+  if (!seasonId) {
+    return (
+      <section className="daily-steps-card">
+        <div className="daily-steps-head">
+          <div>
+            <span className="eyebrow">PASSOS DO DIA</span>
+            <h2>—</h2>
+            <p>Nenhuma temporada disponível.</p>
+          </div>
+          <div className="daily-steps-icon">
+            <Footprints size={28} />
+          </div>
+        </div>
+      </section>
+    )
+  }
+
+  const today = moveToday()
+  const beforeSeason = Boolean(seasonStart && seasonStart > today)
+
+  return (
+    <section className="daily-steps-card">
+      <div className="daily-steps-head">
+        <div>
+          <span className="eyebrow">PASSOS DO DIA</span>
+
+          <h2>
+            {(savedSteps ?? 0).toLocaleString('pt-BR')}
+          </h2>
+
+          <p>
+            Meta da temporada:{' '}
+            <strong>
+              {goal.toLocaleString('pt-BR')} passos
+            </strong>
+          </p>
+        </div>
+
+        <div className="daily-steps-icon">
+          <Footprints size={28} />
+        </div>
+      </div>
+
+      <div className="daily-steps-progress">
+        <div
+          className="daily-steps-progress-fill"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+
+      <div className="daily-steps-meta">
+        <span>{progress}% da meta</span>
+        <strong>
+          {remaining.toLocaleString('pt-BR')} restantes
+        </strong>
+      </div>
+
+      {beforeSeason && (
+        <div className="steps-status pending">
+          A temporada começa em{' '}
+          {new Date(`${seasonStart}T12:00:00`).toLocaleDateString('pt-BR')}.
+          <br />
+          O lançamento dos passos estará disponível a partir do início.
+        </div>
+      )}
+
+      {!beforeSeason && status === 'validated' && (
+        <div className="steps-status success">
+          ✓ Passos validados
+          {savedSteps !== null && savedSteps >= goal
+            ? ' · +10 pts de consistência'
+            : ''}
+        </div>
+      )}
+
+      {!beforeSeason && status === 'pending' && (
+        <div className="steps-status pending">
+          ⏳ Comprovante enviado. Aguardando validação.
+        </div>
+      )}
+
+      {!beforeSeason && status === 'rejected' && (
+        <div className="steps-status rejected">
+          Comprovante recusado. Envie novamente.
+        </div>
+      )}
+
+      {!beforeSeason &&
+        (status === 'idle' || status === 'rejected') && (
+          <div className="daily-steps-form">
+
+            <label>
+              Quantos passos você fez hoje?
+              <input
+                type="number"
+                min="0"
+                max="100000"
+                step="1"
+                inputMode="numeric"
+                value={steps}
+                onChange={event => {
+                  setSteps(event.target.value)
+                  setError('')
+                }}
+                placeholder={`Ex.: ${goal.toLocaleString('pt-BR')}`}
+              />
+            </label>
+
+            <label>
+              Comprovante dos passos
+              <input
+                type="file"
+                accept="image/*,.pdf"
+                onChange={event => {
+                  setProof(event.target.files?.[0] ?? null)
+                  setError('')
+                }}
+              />
+            </label>
+
+            {proof && (
+              <p className="form-note">
+                Arquivo: {proof.name}
+              </p>
+            )}
+
+            {error && (
+              <div className="form-error">
+                {error}
+              </div>
+            )}
+
+            <button
+              className="primary-button"
+              disabled={
+                status === 'uploading' ||
+                !steps ||
+                !proof
+              }
+              onClick={submit}
+            >
+              {status === 'uploading'
+                ? 'Enviando...'
+                : 'Registrar meus passos'}
+            </button>
+
+            <p className="form-note">
+              Ao atingir {goal.toLocaleString('pt-BR')} passos,
+              você completa o dia de consistência após a validação.
+            </p>
+          </div>
+        )}
+
+      {error && status !== 'idle' && (
+        <div className="form-error">
+          {error}
+        </div>
+      )}
+
+      {status === 'pending' && (
+        <p className="form-note">
+          Os passos entram na pontuação somente depois da validação.
+        </p>
+      )}
+    </section>
+  )
 }
+
 
 function HomePage({ userId, season, onNavigate, onRegister, done }: { userId: string; season: CurrentSeason | null; onNavigate: (page: Page) => void; onRegister: () => void; done: boolean }) {
   const [score, setScore] = useState({ points: 0, consistency: 0, evolution: 0, volume: 0, position: 0, total: 0, completedDays: 0 })
@@ -586,6 +914,7 @@ function HomePage({ userId, season, onNavigate, onRegister, done }: { userId: st
     <section className={`today-card ${progress === 100 ? 'completed' : ''}`}><div className="today-top"><div><span className="eyebrow">META DE HOJE</span><h2>{progress === 100 ? 'Atividade registrada!' : 'Seu próximo movimento'}</h2></div><div className="progress-ring"><span>{progress}<small>%</small></span></div></div><div className="progress-line"><span style={{ width: `${progress}%` }} /></div><div className="today-bottom"><span><Footprints size={16} /> {progress === 100 ? '30 min registrados' : '30 min ou 8.000 passos'}</span><button className="primary-button compact" onClick={onRegister}>{progress === 100 ? 'Registrar mais' : 'Registrar atividade'} <ArrowUpRight size={16} /></button></div></section>
     <DailyStepsCard season={season} userId={userId} />
     <SectionHeading title="Arena da semana" action="Ver regras" onClick={() => onNavigate('rules')} /><section className="arena-grid"><MiniChallenge icon={<Target />} tag="PONTUAÇÃO OFICIAL" title="Consistência primeiro" progress={`${score.consistency} pts de consistência`} color="purple" onClick={() => onNavigate('rules')} /><MiniChallenge icon={<Zap />} tag="EVOLUÇÃO" title="Contra seu baseline" progress={`${score.evolution} pts de evolução`} color="yellow" onClick={() => onNavigate('rules')} /><MiniChallenge icon={<Gauge />} tag="VOLUME" title="Intensidade validada" progress={`${score.volume} pts de volume`} color="blue" onClick={() => onNavigate('rules')} /></section>
+    <DailyStepsCard userId={userId} />
     <WeekChallengesCard />
     <SectionHeading title="Seu movimento" action="Ver ranking" onClick={() => onNavigate('ranking')} /><section className="feed-card"><div className="score-info"><Activity size={18} /><div><strong>Dados oficiais do Supabase</strong><p>{score.total ? `${score.total} participantes pontuando nesta temporada.` : 'Ainda não há pontuação registrada nesta temporada.'}</p></div></div><button className="feed-link" onClick={() => onNavigate('ranking')}>Ver ranking geral <ArrowUpRight size={15} /></button></section>
   </>
