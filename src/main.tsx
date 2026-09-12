@@ -395,23 +395,221 @@ function AdminSeasons() {
 }
 
 function AdminParticipants() {
-  const [rows, setRows] = useState<Array<{ id: string; user_id: string; status: string; joined_at: string; season_id: string; profiles: { full_name: string; avatar_emoji: string | null } | null; seasons: { name: string } | null }>>([])
+  const [rows, setRows] = useState<Array<{
+    id: string
+    user_id: string
+    status: string
+    joined_at: string
+    season_id: string
+    profiles: {
+      full_name: string
+      avatar_emoji: string | null
+      status: string
+    } | null
+    seasons: {
+      name: string
+    } | null
+  }>>([])
   const [error, setError] = useState('')
   const [payments, setPayments] = useState<Record<string, string>>({})
+
   const load = async () => {
     if (!supabase) return
-    const [participantResult, paymentResult] = await Promise.all([
-      supabase.from('season_participants').select('id, user_id, season_id, status, joined_at, profiles!season_participants_user_id_fkey(full_name, avatar_emoji), seasons(name)').order('joined_at', { ascending: false }),
-      supabase.from('payments').select('user_id, season_id, payment_status'),
-    ])
-    if (participantResult.error) { setError(participantResult.error.message); return }
+
     setError('')
-    setPayments(Object.fromEntries(((paymentResult.data ?? []) as Array<{ user_id: string; season_id: string; payment_status: string }>).map(row => [`${row.user_id}:${row.season_id}`, row.payment_status])))
-    setRows((participantResult.data ?? []) as unknown as typeof rows)
+
+    const { data: seasons, error: seasonError } = await supabase
+      .from('seasons')
+      .select('id, name, start_date, end_date, status')
+      .in('status', ['registration', 'active'])
+      .order('start_date', { ascending: false })
+
+    if (seasonError) {
+      setError(seasonError.message)
+      return
+    }
+
+    const today = moveToday()
+
+    const currentSeason =
+      (seasons ?? []).find(
+        season =>
+          season.start_date <= today &&
+          season.end_date >= today,
+      ) ??
+      (seasons ?? []).find(
+        season =>
+          season.status === 'registration' &&
+          season.start_date > today,
+      )
+
+    if (!currentSeason) {
+      setRows([])
+      setPayments({})
+      return
+    }
+
+    const [participantResult, paymentResult] = await Promise.all([
+      supabase
+        .from('season_participants')
+        .select(
+          'id, user_id, season_id, status, joined_at, profiles!season_participants_user_id_fkey(full_name, avatar_emoji, status), seasons(name)',
+        )
+        .eq('season_id', currentSeason.id)
+        .order('joined_at', { ascending: false }),
+
+      supabase
+        .from('payments')
+        .select('user_id, season_id, payment_status')
+        .eq('season_id', currentSeason.id),
+    ])
+
+    if (participantResult.error) {
+      setError(participantResult.error.message)
+      return
+    }
+
+    setPayments(
+      Object.fromEntries(
+        ((paymentResult.data ?? []) as Array<{
+          user_id: string
+          season_id: string
+          payment_status: string
+        }>).map(row => [
+          `${row.user_id}:${row.season_id}`,
+          row.payment_status,
+        ]),
+      ),
+    )
+
+    setRows(
+      (participantResult.data ?? []) as unknown as typeof rows,
+    )
   }
-  useEffect(() => { load() }, [])
-  const changeStatus = async (userId: string, status: 'active' | 'blocked' | 'pending') => { if (!supabase) return; const { error: rpcError } = await supabase.rpc('admin_set_profile_status', { p_user_id: userId, p_status: status }); if (rpcError) setError(rpcError.message); else load() }
-  return <><PageTitle eyebrow="PARTICIPANTES" title="Participantes" detail="Status de inscrição e pagamento vindos do Supabase." />{error && <div className="form-error">{error}</div>}<div className="admin-review-list">{rows.length === 0 ? <p className="admin-empty">Nenhum participante encontrado.</p> : rows.map(row => <div className="admin-review-row" key={row.id}><div><strong>{row.profiles?.avatar_emoji ?? '·'} {row.profiles?.full_name ?? 'Participante'}</strong><span>{row.seasons?.name ?? 'Temporada'} · inscrição {new Date(row.joined_at).toLocaleDateString('pt-BR')} · pagamento {payments[`${row.user_id}:${row.season_id}`] ?? 'pendente'}</span><small>Status: {row.status}</small></div><div className="review-actions"><button className="text-button" onClick={() => changeStatus(row.user_id, 'active')}>Ativar</button><button className="text-button reject" onClick={() => changeStatus(row.user_id, 'blocked')}>Bloquear</button></div></div>)}</div></>
+
+  useEffect(() => {
+    load()
+  }, [])
+
+  const changeStatus = async (
+    userId: string,
+    status: 'active' | 'blocked' | 'pending',
+  ) => {
+    if (!supabase) return
+
+    setError('')
+
+    const { error: rpcError } = await supabase.rpc(
+      'admin_set_profile_status',
+      {
+        p_user_id: userId,
+        p_status: status,
+      },
+    )
+
+    if (rpcError) {
+      setError(rpcError.message)
+    } else {
+      await load()
+    }
+  }
+
+  const profileStatusLabel = (status?: string) => {
+    if (status === 'blocked') return 'Bloqueada'
+    if (status === 'pending') return 'Pendente'
+    return 'Ativa'
+  }
+
+  return (
+    <>
+      <PageTitle
+        eyebrow="PARTICIPANTES"
+        title="Participantes"
+        detail="Participantes da temporada atual e status real das contas."
+      />
+
+      {error && <div className="form-error">{error}</div>}
+
+      <div className="admin-review-list">
+        {rows.length === 0 ? (
+          <p className="admin-empty">
+            Nenhum participante encontrado na temporada atual.
+          </p>
+        ) : (
+          rows.map(row => {
+            const accountStatus = row.profiles?.status ?? 'active'
+            const blocked = accountStatus === 'blocked'
+
+            return (
+              <div
+                className="admin-review-row"
+                key={row.id}
+              >
+                <div>
+                  <strong>
+                    {row.profiles?.avatar_emoji ?? '·'}{' '}
+                    {row.profiles?.full_name ?? 'Participante'}
+                  </strong>
+
+                  <span>
+                    {row.seasons?.name ?? 'Temporada'} · inscrição{' '}
+                    {new Date(row.joined_at).toLocaleDateString('pt-BR')} ·
+                    pagamento{' '}
+                    {payments[`${row.user_id}:${row.season_id}`] ??
+                      'pendente'}
+                  </span>
+
+                  <small>
+                    Conta:{' '}
+                    <strong>
+                      {profileStatusLabel(accountStatus)}
+                    </strong>
+                    {' · '}
+                    participação: {row.status}
+                  </small>
+                </div>
+
+                <div className="review-actions">
+                  {blocked ? (
+                    <button
+                      className="text-button"
+                      onClick={() =>
+                        changeStatus(row.user_id, 'active')
+                      }
+                    >
+                      Desbloquear
+                    </button>
+                  ) : (
+                    <>
+                      {accountStatus !== 'active' && (
+                        <button
+                          className="text-button"
+                          onClick={() =>
+                            changeStatus(row.user_id, 'active')
+                          }
+                        >
+                          Ativar
+                        </button>
+                      )}
+
+                      <button
+                        className="text-button reject"
+                        onClick={() =>
+                          changeStatus(row.user_id, 'blocked')
+                        }
+                      >
+                        Bloquear
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            )
+          })
+        )}
+      </div>
+    </>
+  )
 }
 
 function AdminPayments() {
