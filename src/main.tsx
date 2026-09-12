@@ -1289,7 +1289,9 @@ function GroupsPage({ userId, onAction }: { userId: string; onAction: (message: 
   const load = async () => {
     if (!supabase) { setLoading(false); return }
     const { data, error: loadError } = await supabase
-      .from('group_members').select('groups(id, name, owner_id, invite_code)')
+  .from('group_members')
+  .select('groups(id, name, owner_id, invite_code)')
+  .eq('user_id', userId)
     if (loadError) { setError(loadError.message); setLoading(false); return }
     setError('')
     setGroups(((data ?? []) as unknown as Array<{ groups: GroupRow | null }>).map(row => row.groups).filter(Boolean) as GroupRow[])
