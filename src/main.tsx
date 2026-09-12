@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import {
   Activity, ArrowUpRight, Award, Bell, BookOpen, Check, ChevronRight, CircleHelp,
