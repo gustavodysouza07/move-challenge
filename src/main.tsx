@@ -20,11 +20,42 @@ const metValues: Record<ActivityType, number> = {
   'Funcional / HIIT': 8, 'Yoga / alongamento': 2.5,
 }
 
+function moveToday() {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date())
+  const get = (type: string) => parts.find(part => part.type === type)?.value ?? ''
+  return `${get('year')}-${get('month')}-${get('day')}`
+}
+
 const navItems: { id: Page; label: string; icon: typeof Home }[] = [
   { id: 'home', label: 'Home', icon: Home }, { id: 'ranking', label: 'Ranking', icon: Trophy },
   { id: 'register', label: 'Registrar', icon: Play }, { id: 'activities', label: 'Minhas atividades', icon: History }, { id: 'challenges', label: 'Duelos', icon: Swords },
   { id: 'profile', label: 'Perfil', icon: UserRound },
 ]
+
+class MoveErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error: Error | null }
+> {
+  state = { error: null as Error | null }
+
+  static getDerivedStateFromError(error: Error) {
+    return { error }
+  }
+
+  render() {
+    if (this.state.error) {
+      return <div className="auth-shell">
+        <div className="auth-card access-card">
+          <span className="brand-mark"><CircleHelp size={20} /></span>
+          <h1>Não foi possível abrir esta tela</h1>
+          <p>{this.state.error.message}</p>
+          <button className="primary-button full" onClick={() => window.location.reload()}>Recarregar</button>
+        </div>
+      </div>
+    }
+    return this.props.children
+  }
+}
 
 function App() {
   const { user, profile, loading, configured, signOut } = useAuth()
@@ -52,7 +83,7 @@ function App() {
   useEffect(() => {
     if (!supabase || !user) return
     supabase.from('seasons').select('id, name, start_date, end_date, status').in('status', ['registration', 'active']).order('start_date', { ascending: true }).then(({ data }) => {
-      const today = new Date().toISOString().slice(0, 10)
+      const today = moveToday()
       const seasons = (data ?? []) as CurrentSeason[]
       setCurrentSeason(seasons.find(season => season.start_date <= today && season.end_date >= today) ?? seasons.find(season => season.status === 'registration' && season.start_date > today) ?? null)
     })
@@ -81,9 +112,9 @@ function App() {
       <button className="season-pill" onClick={() => go('enrollment')}><span className="live-dot" /> {currentSeason?.name ?? 'Nenhuma temporada disponível'} <ChevronRight size={13} /></button>
       <div className="top-actions"><button className="icon-button" onClick={() => notify('Você está em dia!')} aria-label="Notificações"><Bell size={19} /><span className="notification-dot" /></button><button className="avatar-button" onClick={() => go('profile')}>{profile?.avatar_emoji || '🪩'}</button><button className="icon-button menu-button" onClick={() => setMenuOpen(!menuOpen)} aria-label="Abrir menu"><Menu size={20} /></button></div>
     </header>
-    {menuOpen && <div className="quick-menu"><button onClick={() => go('rules')}><BookOpen size={17} /> Como pontua</button><button onClick={() => go('groups')}><Users size={17} /> Meus grupos</button><button onClick={() => go('install')}><Smartphone size={17} /> Instalar no celular</button><button onClick={() => go('faq')}><CircleHelp size={17} /> Perguntas frequentes</button><button onClick={() => go('privacy')}><ShieldCheck size={17} /> Privacidade</button>{profile?.role === 'admin' && <button onClick={() => go('admin')}><ShieldCheck size={17} /> Admin</button>}<button onClick={() => notify('Tudo certo: seus dados estão protegidos.')}><ShieldCheck size={17} /> Privacidade</button><button onClick={() => signOut()}><Lock size={17} /> Sair</button></div>}
+    {menuOpen && <div className="quick-menu"><button onClick={() => go('rules')}><BookOpen size={17} /> Como pontua</button><button onClick={() => go('groups')}><Users size={17} /> Meus grupos</button><button onClick={() => go('install')}><Smartphone size={17} /> Instalar no celular</button><button onClick={() => go('faq')}><CircleHelp size={17} /> Perguntas frequentes</button><button onClick={() => go('privacy')}><ShieldCheck size={17} /> Privacidade</button>{profile?.role === 'admin' && <button onClick={() => go('admin')}><ShieldCheck size={17} /> Admin</button>}<button onClick={() => signOut()}><Lock size={17} /> Sair</button></div>}
 
-    <main className="content">{page === 'home' && <HomePage userId={user.id} onNavigate={go} onRegister={() => setShowRegister(true)} done={activityDone} />}{page === 'ranking' && <RankingPage userId={user.id} />}{page === 'register' && <RegisterPage onCancelled={() => { setActiveSession(null); setCompletedSession(null) }} activeSession={activeSession} completedSession={completedSession} onStarted={setActiveSession} onCompleted={session => { setActiveSession(null); setCompletedSession(session) }} onDone={(session) => { setCompletedSession(null); setActivityDone(true); notify(`Atividade de ${formatDuration(session.duration_seconds ?? 0)} enviada para validação.`); go('home') }} />}{page === 'activities' && <ActivityHistoryPage userId={user.id} />}{page === 'challenges' && <DuelsPage userId={user.id} onAction={notify} />}{page === 'groups' && <GroupsPage userId={user.id} onAction={notify} />}{page === 'profile' && <ProfilePage profile={profile} onNavigate={go} onAction={notify} />}{page === 'rules' && <RulesPage />}{page === 'privacy' && <PrivacyPage />}{page === 'faq' && <FaqPage />}{page === 'install' && <InstallGuide />}{page === 'enrollment' && <EnrollmentPage />}{page === 'admin' && (profile?.role === 'admin' ? <AdminWorkspace /> : <AccessState title="Área restrita" detail="Apenas administradores podem acessar este espaço." onAction={() => go('home')} action="Voltar" />)}</main>
+    <main className="content">{page === 'home' && <HomePage userId={user.id} season={currentSeason} onNavigate={go} onRegister={() => setShowRegister(true)} done={activityDone} />}{page === 'ranking' && <RankingPage userId={user.id} />}{page === 'register' && <RegisterPage season={currentSeason} onCancelled={() => { setActiveSession(null); setCompletedSession(null) }} activeSession={activeSession} completedSession={completedSession} onStarted={setActiveSession} onCompleted={session => { setActiveSession(null); setCompletedSession(session) }} onDone={(session) => { setCompletedSession(null); setActivityDone(true); notify(`Atividade de ${formatDuration(session.duration_seconds ?? 0)} enviada para validação.`); go('home') }} />}{page === 'activities' && <ActivityHistoryPage userId={user.id} />}{page === 'challenges' && <DuelsPage userId={user.id} onAction={notify} />}{page === 'groups' && <GroupsPage userId={user.id} onAction={notify} />}{page === 'profile' && <ProfilePage profile={profile} onNavigate={go} onAction={notify} />}{page === 'rules' && <RulesPage />}{page === 'privacy' && <PrivacyPage />}{page === 'faq' && <FaqPage />}{page === 'install' && <InstallGuide />}{page === 'enrollment' && <EnrollmentPage />}{page === 'admin' && (profile?.role === 'admin' ? <AdminWorkspace /> : <AccessState title="Área restrita" detail="Apenas administradores podem acessar este espaço." onAction={() => go('home')} action="Voltar" />)}</main>
 
     <nav className="bottom-nav">{navItems.map(({ id, label, icon: Icon }) => <button key={id} className={page === id ? 'active' : ''} onClick={() => id === 'register' ? setShowRegister(true) : go(id)}><span className="nav-icon"><Icon size={20} strokeWidth={page === id ? 2.5 : 1.8} /></span><span>{label}</span></button>)}</nav>
     {(showRegister || activeSession || completedSession) && <RegisterModal onCancelled={() => { setActiveSession(null); setCompletedSession(null); setShowRegister(false) }} season={currentSeason} activeSession={activeSession} completedSession={completedSession} onClose={() => { setShowRegister(false); setCompletedSession(null) }} onStarted={setActiveSession} onCompleted={session => { setActiveSession(null); setCompletedSession(session) }} onDone={(session) => { setActiveSession(null); setCompletedSession(null); setActivityDone(true); setShowRegister(false); notify(`Atividade de ${formatDuration(session.duration_seconds ?? 0)} enviada para validação.`) }} />}
@@ -103,9 +134,93 @@ function EnrollmentPage() {
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [baseMinutes, setBaseMinutes] = useState('')
+  const [baseSteps, setBaseSteps] = useState('')
   const [declared, setDeclared] = useState<{ average_active_minutes: number; average_steps: number } | null>(null)
   const [proofFile, setProofFile] = useState<File | null>(null)
-  useEffect(() => { if (!supabase || !user) { setBusy(false); return }; const load = async () => { const { data: seasonData } = await supabase.from('seasons').select('id, name, description, entry_fee, pix_key, start_date, end_date').eq('status', 'registration').order('start_date', { ascending: true }).limit(1).maybeSingle(); setSeason(seasonData); if (seasonData) { const { data: paymentData } = await supabase.from('payments').select('id, amount, payment_status, proof_url').eq('user_id', user.id).eq('season_id', seasonData.id).maybeSingle(); setPayment(paymentData); const { data: baselineData } = await supabase.from('baseline_metrics').select('average_active_minutes, average_steps').eq('user_id', user.id).eq('season_id', seasonData.id).maybeSingle(); setDeclared(baselineData) }; setBusy(false) }; load() }, [user])
+  useEffect(() => {
+    if (!supabase || !user) { setBusy(false); return }
+    let cancelled = false
+    const load = async () => {
+      setBusy(true)
+      setError('')
+      try {
+        const today = moveToday()
+
+        // Keep the registration query explicit: registration is the season users can join.
+        const { data: registrationSeason, error: registrationError } = await supabase
+          .from('seasons')
+          .select('id, name, description, entry_fee, pix_key, start_date, end_date')
+          .eq('status', 'registration')
+          .order('start_date', { ascending: true })
+          .limit(1)
+          .maybeSingle()
+
+        if (cancelled) return
+
+        // If there is no registration season, allow the current active season to be
+        // displayed for an already enrolled participant. This does not open enrollment.
+        let seasonData = registrationSeason
+        if (!seasonData && !registrationError) {
+          const { data: activeSeason } = await supabase
+            .from('seasons')
+            .select('id, name, description, entry_fee, pix_key, start_date, end_date')
+            .eq('status', 'active')
+            .lte('start_date', today)
+            .gte('end_date', today)
+            .order('start_date', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+          seasonData = activeSeason
+        }
+
+        if (registrationError) {
+          setError(`Não foi possível carregar a temporada: ${registrationError.message}`)
+          setSeason(null)
+          setPayment(null)
+          setDeclared(null)
+          return
+        }
+
+        setSeason(seasonData)
+
+        if (!seasonData) {
+          setPayment(null)
+          setDeclared(null)
+          return
+        }
+
+        const [{ data: paymentData, error: paymentError }, { data: baselineData, error: baselineError }] = await Promise.all([
+          supabase.from('payments')
+            .select('id, amount, payment_status, proof_url')
+            .eq('user_id', user.id)
+            .eq('season_id', seasonData.id)
+            .maybeSingle(),
+          supabase.from('baseline_metrics')
+            .select('average_active_minutes, average_steps')
+            .eq('user_id', user.id)
+            .eq('season_id', seasonData.id)
+            .maybeSingle(),
+        ])
+
+        if (cancelled) return
+        if (paymentError) setError(`Não foi possível carregar sua inscrição: ${paymentError.message}`)
+        if (baselineError) setError(`Não foi possível carregar seu ponto de partida: ${baselineError.message}`)
+        setPayment(paymentData)
+        setDeclared(baselineData)
+      } catch (caught) {
+        if (!cancelled) {
+          setError(`Não foi possível abrir a temporada: ${caught instanceof Error ? caught.message : 'erro inesperado'}`)
+          setSeason(null)
+          setPayment(null)
+          setDeclared(null)
+        }
+      } finally {
+        if (!cancelled) setBusy(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [user])
   const fillMissing = async () => {
     if (!supabase) return
     if (baseMinutes.trim() === '') {
@@ -115,7 +230,7 @@ function EnrollmentPage() {
     setBusy(true); setError('')
     const { data, error: rpcError } = await supabase.rpc('set_missing_baseline', {
   p_average_active_minutes: Number(baseMinutes),
-  p_average_steps: 0,
+  p_average_steps: Number(baseSteps || 0),
 })
     setBusy(false)
     if (rpcError) setError(rpcError.message)
@@ -131,7 +246,7 @@ function EnrollmentPage() {
    const { data, error: rpcError } = await supabase.rpc('request_season_participation', {
   p_season_id: season.id,
   p_average_active_minutes: Number(baseMinutes),
-  p_average_steps: 0,
+  p_average_steps: Number(baseSteps || 0),
 }); setBusy(false); if (rpcError) setError(rpcError.message); else { setPayment(data); setMessage('Inscrição criada. Faça o PIX e confirme o envio do pagamento.') } }
   const confirmPix = async () => { if (!supabase || !payment) return; setBusy(true); setError(''); const { data, error: updateError } = await supabase.from('payments').update({ payment_status: 'submitted' }).eq('id', payment.id).select('id, amount, payment_status, proof_url').single(); setBusy(false); if (updateError) setError(updateError.message); else { setPayment(data); setMessage('Pagamento enviado. Aguardando aprovação.') } }
   const copyPixKey = async () => { if (!season.pix_key) return; try { await navigator.clipboard.writeText(season.pix_key); setMessage('Chave PIX copiada.') } catch { setError('Não foi possível copiar a chave PIX.') } }
@@ -331,7 +446,7 @@ function AdminPage() {
       supabase.from('season_participants').select('id', { count: 'exact', head: true }).in('status', ['pending_payment', 'pending_approval']),
       supabase.from('season_participants').select('id', { count: 'exact', head: true }).eq('status', 'active'),
       supabase.from('payments').select('id, amount, payment_status, created_at, proof_url, profiles!payments_user_id_fkey(full_name, email), seasons(name)').in('payment_status', ['pending', 'submitted']).order('created_at', { ascending: true }),
-      supabase.from('activity_sessions').select('id, activity_type, started_at, ended_at, duration_seconds, status, source, profiles(full_name), activity_proofs(proof_type, storage_path, external_reference)').eq('status', 'pending_validation').order('created_at', { ascending: true }),
+      supabase.from('activity_sessions').select('id, activity_type, started_at, ended_at, duration_seconds, status, source, profiles(full_name, avatar_emoji), activity_proofs(proof_type, storage_path, external_reference)').eq('status', 'pending_validation').order('created_at', { ascending: true }),
     ])
     setStats({ seasons: seasons.count ?? 0, participants: participants.count ?? 0, pending: pending.count ?? 0, active: active.count ?? 0 })
     const failure = paymentResult.error ?? activityResult.error
@@ -351,7 +466,7 @@ function AdminReview({ title, empty, children }: { title: string; empty: string;
 function PageTitle({ eyebrow, title, detail }: { eyebrow: string; title: string; detail?: string }) { return <div className="page-title"><span className="eyebrow">{eyebrow}</span><h1>{title}</h1>{detail && <p>{detail}</p>}</div> }
 function SectionHeading({ title, action, onClick }: { title: string; action?: string; onClick?: () => void }) { return <div className="section-heading"><h2>{title}</h2>{action && <button onClick={onClick}>{action} <ChevronRight size={15} /></button>}</div> }
 
-type ScoreRow = { user_id: string; consistency_points: number; evolution_points: number; volume_points: number; bonus_points: number; completed_days: number; total_points: number; profiles?: { full_name: string } | null }
+type ScoreRow = { user_id: string; consistency_points: number; evolution_points: number; volume_points: number; bonus_points: number; completed_days: number; total_points: number; profiles?: { full_name: string; avatar_emoji?: string | null } | null }
 
 type Nudge = { kind: string | null; tone?: string; text?: string }
 
@@ -414,212 +529,62 @@ function NudgeBanner() {
   if (!nudge?.text) return null
   return <div className={`nudge nudge-${nudge.kind} tone-${nudge.tone ?? 'mid'}`}>{nudge.text}</div>
 }
-function DailyStepsCard({ userId }: { userId: string }) {
+
+function DailyStepsCard({ season, userId }: { season: CurrentSeason | null; userId: string }) {
   const [steps, setSteps] = useState('')
+  const [record, setRecord] = useState<{ steps: number; status: 'pending_validation' | 'validated' | 'rejected'; rejection_reason: string | null } | null>(null)
   const [proof, setProof] = useState<File | null>(null)
-  const [status, setStatus] = useState<'idle' | 'uploading' | 'pending' | 'validated' | 'rejected'>('idle')
-  const [savedSteps, setSavedSteps] = useState<number | null>(null)
+  const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-
-  const loadToday = async () => {
-    if (!supabase) return
-
-    const { data } = await supabase
-      .from('daily_steps')
-      .select('steps, status')
-      .eq('user_id', userId)
-      .eq('step_date', new Date().toISOString().slice(0, 10))
-      .maybeSingle()
-
-    if (!data) {
-      setStatus('idle')
-      setSavedSteps(null)
-      return
-    }
-
-    setSavedSteps(data.steps)
-
-    if (data.status === 'validated') setStatus('validated')
-    else if (data.status === 'rejected') setStatus('rejected')
-    else setStatus('pending')
-  }
+  const today = moveToday()
+  const started = Boolean(season && season.status === 'active' && season.start_date <= today && season.end_date >= today)
+  const currentSteps = record?.steps ?? (steps ? Number(steps) : 0)
+  const progress = Math.min(100, Math.round((currentSteps / 8000) * 100))
 
   useEffect(() => {
-    loadToday()
-  }, [userId])
-
-  const progress = Math.min(
-    100,
-    Math.round(((savedSteps ?? Number(steps) ?? 0) / 8000) * 100)
-  )
+    if (!supabase || !season || !started) return
+    supabase.from('daily_steps').select('steps, status, rejection_reason').eq('user_id', userId).eq('season_id', season.id).eq('step_date', today).maybeSingle().then(({ data }) => {
+      if (data) {
+        setRecord(data as typeof record)
+        setSteps(String(data.steps))
+      }
+    })
+  }, [userId, season?.id, started, today])
 
   const submit = async () => {
-    if (!supabase) {
-      setError('Supabase não configurado.')
-      return
-    }
-
+    if (!supabase || !season || !proof) return
     const value = Number(steps)
-
-    if (!Number.isInteger(value) || value < 0 || value > 100000) {
-      setError('Informe uma quantidade válida de passos.')
-      return
-    }
-
-    if (!proof) {
-      setError('Anexe um comprovante dos seus passos.')
-      return
-    }
-
-    setStatus('uploading')
-    setError('')
-
+    if (!Number.isInteger(value) || value < 0 || value > 100000) { setError('Informe uma quantidade válida entre 0 e 100.000 passos.'); return }
+    if (!['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(proof.type) || proof.size > 5 * 1024 * 1024) { setError('Envie JPG, PNG, WEBP ou PDF de até 5 MB.'); return }
+    setBusy(true); setError('')
     const extension = proof.name.split('.').pop()?.toLowerCase() || 'jpg'
     const path = `${userId}/steps-${Date.now()}.${extension}`
-
-    const { error: uploadError } = await supabase.storage
-      .from('activity-proofs')
-      .upload(path, proof, {
-        upsert: false,
-        contentType: proof.type || undefined,
-      })
-
-    if (uploadError) {
-      setStatus('idle')
-      setError('Não foi possível enviar o comprovante.')
-      return
-    }
-
-    const { data, error: rpcError } = await supabase.rpc(
-      'submit_daily_steps',
-      {
-        p_step_date: new Date().toISOString().slice(0, 10),
-        p_steps: value,
-        p_storage_path: path,
-      }
-    )
-
-    if (rpcError) {
-      setStatus('idle')
-      setError(rpcError.message)
-      return
-    }
-
-    setSavedSteps(Number(data?.steps ?? value))
-    setStatus('pending')
+    const upload = await supabase.storage.from('activity-proofs').upload(path, proof, { upsert: false, contentType: proof.type })
+    if (upload.error) { setBusy(false); setError('Não foi possível enviar o comprovante.'); return }
+    const { data, error: rpcError } = await supabase.rpc('submit_daily_steps', { p_step_date: today, p_steps: value, p_storage_path: path })
+    setBusy(false)
+    if (rpcError) { setError(rpcError.message); return }
+    setRecord(data as typeof record)
     setProof(null)
-    setSteps('')
   }
 
-  return (
-    <section className="daily-steps-card">
-      <div className="daily-steps-head">
-        <div>
-          <span className="eyebrow">PASSOS DE HOJE</span>
-          <h2>{(savedSteps ?? 0).toLocaleString('pt-BR')}</h2>
-          <p>Meta de 8.000 passos</p>
-        </div>
+  if (!season) return null
+  if (!started) return <section className="daily-steps-card"><div className="daily-steps-head"><div><span className="eyebrow">PASSOS DO DIA</span><h2>8.000 passos</h2></div><Footprints size={22} /></div><p>A meta de passos ficará disponível a partir de <strong>{new Date(`${season.start_date}T12:00:00`).toLocaleDateString('pt-BR')}</strong>, quando a temporada começar.</p></section>
 
-        <div className="daily-steps-icon">👟</div>
-      </div>
-
-      <div className="daily-steps-progress">
-        <div
-          className="daily-steps-progress-fill"
-          style={{ width: `${progress}%` }}
-        />
-      </div>
-
-      <div className="daily-steps-meta">
-        <span>{progress}% da meta</span>
-        <strong>
-          {Math.max(0, 8000 - (savedSteps ?? 0)).toLocaleString('pt-BR')} restantes
-        </strong>
-      </div>
-
-      {status === 'validated' && (
-        <div className="steps-status success">
-          ✓ Passos validados · +10 pts de consistência
-        </div>
-      )}
-
-      {status === 'pending' && (
-        <div className="steps-status pending">
-          ⏳ Comprovante enviado. Aguardando validação.
-        </div>
-      )}
-
-      {status === 'rejected' && (
-        <div className="steps-status rejected">
-          Comprovante recusado. Você pode enviar novamente.
-        </div>
-      )}
-
-      {(status === 'idle' || status === 'rejected') && (
-        <div className="daily-steps-form">
-          <label>
-            Quantos passos você fez?
-            <input
-              type="number"
-              min="0"
-              max="100000"
-              value={steps}
-              onChange={event => setSteps(event.target.value)}
-              placeholder="Ex.: 8.432"
-            />
-          </label>
-
-          <label>
-            Comprovante
-            <input
-              type="file"
-              accept="image/*,.pdf"
-              onChange={event => setProof(event.target.files?.[0] ?? null)}
-            />
-          </label>
-
-          {proof && (
-            <p className="form-note">
-              Arquivo: {proof.name}
-            </p>
-          )}
-
-          {error && (
-            <div className="form-error">
-              {error}
-            </div>
-          )}
-
-          <button
-            className="primary-button"
-            disabled={status === 'uploading'}
-            onClick={submit}
-          >
-            {status === 'uploading'
-              ? 'Enviando...'
-              : 'Registrar meus passos'}
-          </button>
-        </div>
-      )}
-
-      {status === 'pending' && (
-        <p className="form-note">
-          Os passos só entram na pontuação depois da validação.
-        </p>
-      )}
-    </section>
-  )
+  return <section className="daily-steps-card"><div className="daily-steps-head"><div><span className="eyebrow">PASSOS DO DIA</span><h2>{currentSteps.toLocaleString('pt-BR')} <small>/ 8.000</small></h2></div><Footprints size={22} /></div><div className="progress-line"><span style={{ width: `${progress}%` }} /></div><div className="daily-steps-status">{record?.status === 'validated' ? record.steps >= 8000 ? <strong>✓ Passos validados · +10 pts de consistência</strong> : <strong>✓ Passos validados</strong> : record?.status === 'rejected' ? <strong>Comprovante recusado: {record.rejection_reason || 'envie um novo comprovante.'}</strong> : record?.status === 'pending_validation' ? <strong>Comprovante enviado · aguardando validação</strong> : <span>Registre seus passos e envie o comprovante do dia.</span>}</div>{record?.status !== 'validated' && <div className="daily-steps-form"><input type="number" min={0} max={100000} placeholder="Quantidade de passos" value={steps} onChange={e => { setSteps(e.target.value); setError('') }} /><input type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" onChange={e => { setProof(e.target.files?.[0] ?? null); setError('') }} /><button className="primary-button" disabled={busy || !proof}>{busy ? 'Enviando...' : 'Enviar passos do dia'} <ArrowUpRight size={16} /></button></div>}{error && <div className="form-error">{error}</div>}</section>
 }
-function HomePage({ userId, onNavigate, onRegister, done }: { userId: string; onNavigate: (page: Page) => void; onRegister: () => void; done: boolean }) {
+
+function HomePage({ userId, season, onNavigate, onRegister, done }: { userId: string; season: CurrentSeason | null; onNavigate: (page: Page) => void; onRegister: () => void; done: boolean }) {
   const [score, setScore] = useState({ points: 0, consistency: 0, evolution: 0, volume: 0, position: 0, total: 0, completedDays: 0 })
   const [seasonName, setSeasonName] = useState('')
-  useEffect(() => { if (!supabase) return; const load = async () => { const { data: seasons } = await supabase.from('seasons').select('id, name, start_date, end_date, status').in('status', ['registration', 'active']).order('start_date', { ascending: false }); const today = new Date().toISOString().slice(0, 10); const season = (seasons ?? []).find(item => item.start_date <= today && item.end_date >= today) as { id: string; name: string } | undefined; if (!season) return; setSeasonName(season.name); const { data } = await supabase.from('weekly_scores').select('user_id, consistency_points, evolution_points, volume_points, bonus_points, completed_days, total_points').eq('season_id', season.id); const rows = (data ?? []) as ScoreRow[]; const totals = new Map<string, ScoreRow>(); rows.forEach(row => { const existing = totals.get(row.user_id) ?? { ...row, consistency_points: 0, evolution_points: 0, volume_points: 0, bonus_points: 0, completed_days: 0, total_points: 0 }; existing.consistency_points += Number(row.consistency_points); existing.evolution_points += Number(row.evolution_points); existing.volume_points += Number(row.volume_points); existing.bonus_points += Number(row.bonus_points); existing.completed_days += Number(row.completed_days); existing.total_points += Number(row.total_points); totals.set(row.user_id, existing) }); const ordered = [...totals.values()].sort((a, b) => b.total_points - a.total_points); const mine = totals.get(userId); setScore({ points: mine?.total_points ?? 0, consistency: mine?.consistency_points ?? 0, evolution: mine?.evolution_points ?? 0, volume: mine?.volume_points ?? 0, position: mine ? ordered.findIndex(row => row.user_id === userId) + 1 : 0, total: ordered.length, completedDays: mine?.completed_days ?? 0 }) }; load() }, [userId])
-  const progress = done || score.completedDays > 0 ? 100 : 0
+  useEffect(() => { if (!supabase) return; const load = async () => { const { data: seasons } = await supabase.from('seasons').select('id, name, start_date, end_date, status').in('status', ['registration', 'active']).order('start_date', { ascending: false }); const today = moveToday(); const season = (seasons ?? []).find(item => item.start_date <= today && item.end_date >= today) as { id: string; name: string } | undefined; const displaySeason = season ?? (seasons ?? []).find(item => item.status === 'registration' && item.start_date > today) as { id: string; name: string } | undefined; setSeasonName(displaySeason?.name ?? ''); if (!season) return; const { data } = await supabase.from('weekly_scores').select('user_id, consistency_points, evolution_points, volume_points, bonus_points, completed_days, total_points').eq('season_id', season.id); const rows = (data ?? []) as ScoreRow[]; const totals = new Map<string, ScoreRow>(); rows.forEach(row => { const existing = totals.get(row.user_id) ?? { ...row, consistency_points: 0, evolution_points: 0, volume_points: 0, bonus_points: 0, completed_days: 0, total_points: 0 }; existing.consistency_points += Number(row.consistency_points); existing.evolution_points += Number(row.evolution_points); existing.volume_points += Number(row.volume_points); existing.bonus_points += Number(row.bonus_points); existing.completed_days += Number(row.completed_days); existing.total_points += Number(row.total_points); totals.set(row.user_id, existing) }); const ordered = [...totals.values()].sort((a, b) => b.total_points - a.total_points); const mine = totals.get(userId); setScore({ points: mine?.total_points ?? 0, consistency: mine?.consistency_points ?? 0, evolution: mine?.evolution_points ?? 0, volume: mine?.volume_points ?? 0, position: mine ? ordered.findIndex(row => row.user_id === userId) + 1 : 0, total: ordered.length, completedDays: mine?.completed_days ?? 0 }) }; load() }, [userId])
+  const progress = done ? 100 : 0
   return <>
     <NudgeBanner />
     <section className="hero"><div className="hero-copy"><span className="eyebrow">{new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' }).toUpperCase()}{seasonName ? ` · ${seasonName}` : ''}</span><h1>Consistência que<br /><em>transforma.</em></h1><p>Você não compete contra o corpo do outro.<br />Compete contra sua versão de ontem.</p></div><div className="hero-orbit"><div className="orbit-ring" /><div className="hero-emoji">🪩</div><span className="orbit-star star-one">✦</span><span className="orbit-star star-two">✧</span></div></section>
     <section className="stats-grid"><Stat icon={<Trophy />} label="posição" value={score.position ? `#${score.position}` : '-'} accent="violet" /><Stat icon={<Zap />} label="pontos" value={score.points.toLocaleString('pt-BR')} accent="cyan" /><Stat icon={<Flame />} label="dias concluídos" value={String(score.completedDays)} accent="orange" /></section>
-    <section className={`today-card ${progress === 100 ? 'completed' : ''}`}><div className="today-top"><div><span className="eyebrow">META DE HOJE</span><h2>{progress === 100 ? 'Meta batida!' : 'Seu próximo movimento'}</h2></div><div className="progress-ring"><span>{progress}<small>%</small></span></div></div><div className="progress-line"><span style={{ width: `${progress}%` }} /></div><div className="today-bottom"><span><Footprints size={16} /> {progress === 100 ? '30 min completos' : 'Comece uma atividade'}</span><button className="primary-button compact" onClick={onRegister}>{progress === 100 ? 'Registrar mais' : 'Registrar atividade'} <ArrowUpRight size={16} /></button></div></section>
+    <section className={`today-card ${progress === 100 ? 'completed' : ''}`}><div className="today-top"><div><span className="eyebrow">META DE HOJE</span><h2>{progress === 100 ? 'Atividade registrada!' : 'Seu próximo movimento'}</h2></div><div className="progress-ring"><span>{progress}<small>%</small></span></div></div><div className="progress-line"><span style={{ width: `${progress}%` }} /></div><div className="today-bottom"><span><Footprints size={16} /> {progress === 100 ? '30 min registrados' : '30 min ou 8.000 passos'}</span><button className="primary-button compact" onClick={onRegister}>{progress === 100 ? 'Registrar mais' : 'Registrar atividade'} <ArrowUpRight size={16} /></button></div></section>
+    <DailyStepsCard season={season} userId={userId} />
     <SectionHeading title="Arena da semana" action="Ver regras" onClick={() => onNavigate('rules')} /><section className="arena-grid"><MiniChallenge icon={<Target />} tag="PONTUAÇÃO OFICIAL" title="Consistência primeiro" progress={`${score.consistency} pts de consistência`} color="purple" onClick={() => onNavigate('rules')} /><MiniChallenge icon={<Zap />} tag="EVOLUÇÃO" title="Contra seu baseline" progress={`${score.evolution} pts de evolução`} color="yellow" onClick={() => onNavigate('rules')} /><MiniChallenge icon={<Gauge />} tag="VOLUME" title="Intensidade validada" progress={`${score.volume} pts de volume`} color="blue" onClick={() => onNavigate('rules')} /></section>
     <WeekChallengesCard />
     <SectionHeading title="Seu movimento" action="Ver ranking" onClick={() => onNavigate('ranking')} /><section className="feed-card"><div className="score-info"><Activity size={18} /><div><strong>Dados oficiais do Supabase</strong><p>{score.total ? `${score.total} participantes pontuando nesta temporada.` : 'Ainda não há pontuação registrada nesta temporada.'}</p></div></div><button className="feed-link" onClick={() => onNavigate('ranking')}>Ver ranking geral <ArrowUpRight size={15} /></button></section>
@@ -628,9 +593,9 @@ function HomePage({ userId, onNavigate, onRegister, done }: { userId: string; on
 function Stat({ icon, label, value, accent }: { icon: React.ReactNode; label: string; value: string; accent: string }) { return <div className="stat-card"><span className={`stat-icon ${accent}`}>{icon}</span><span className="stat-label">{label}</span><strong>{value}</strong></div> }
 function MiniChallenge({ icon, tag, title, progress, color, onClick }: { icon: React.ReactNode; tag: string; title: string; progress: string; color: string; onClick: () => void }) { return <button className={`mini-challenge ${color}`} onClick={onClick}><div className="challenge-icon">{icon}</div><span className="eyebrow">{tag}</span><h3>{title}</h3><p>{progress}</p><ChevronRight className="card-arrow" size={18} /></button> }
 
-function RankingPage({ userId }: { userId: string }) { const [rows, setRows] = useState<ScoreRow[]>([]); const [loading, setLoading] = useState(true); useEffect(() => { if (!supabase) { setLoading(false); return }; const load = async () => { const { data: season } = await supabase.from('seasons').select('id, name, start_date').eq('status', 'active').order('start_date', { ascending: false }).limit(1).maybeSingle(); if (!season) { setLoading(false); return }; const { data } = await supabase.from('weekly_scores').select('user_id, consistency_points, evolution_points, volume_points, bonus_points, completed_days, total_points, profiles(full_name)').eq('season_id', season.id); const totals = new Map<string, ScoreRow>(); (data ?? []).forEach(item => { const row = item as unknown as ScoreRow; const existing = totals.get(row.user_id) ?? { user_id: row.user_id, consistency_points: 0, evolution_points: 0, volume_points: 0, bonus_points: 0, completed_days: 0, total_points: 0, profiles: row.profiles }; existing.consistency_points += Number(row.consistency_points); existing.evolution_points += Number(row.evolution_points); existing.volume_points += Number(row.volume_points); existing.bonus_points += Number(row.bonus_points); existing.completed_days += Number(row.completed_days); existing.total_points += Number(row.total_points); totals.set(row.user_id, existing) }); setRows([...totals.values()].sort((a, b) => b.total_points - a.total_points)); setLoading(false) }; load() }, []); const position = rows.findIndex(row => row.user_id === userId) + 1; return <><PageTitle eyebrow="PLACAR DA TEMPORADA" title="Quem está se movendo?" detail="Pontuação oficial calculada e validada pelo Supabase." /><div className="your-position"><div><span className="eyebrow">SUA POSIÇÃO</span><h2>{position ? `#${position}` : '-'} <small>de {rows.length} pessoas</small></h2></div><div className="gap-copy"><strong>{rows[position - 2] ? `${(rows[position - 2].total_points - (rows[position - 1]?.total_points ?? 0)).toLocaleString('pt-BR')} pts` : 'No topo'}</strong><span>{rows[position - 2] ? 'para alcançar a posição acima' : 'continue consistente'}</span></div></div><SectionHeading title="Ranking geral" action="Pontuação total" /><div className="leaderboard">{loading ? <p className="admin-empty">Carregando ranking...</p> : rows.map((person, index) => <div className={`rank-row ${person.user_id === userId ? 'current-user' : ''}`} key={person.user_id}><span className="rank-number">{index + 1}</span><span className="rank-avatar">{person.user_id === userId ? '🪩' : '✦'}</span><div className="rank-person"><strong>{person.profiles?.full_name ?? 'Participante'}</strong><span><Flame size={13} /> {person.completed_days} dias <i /> {person.consistency_points} pts consistência</span></div><strong className="rank-points">{person.total_points.toLocaleString('pt-BR')} <small>pts</small></strong></div>)}</div><SeasonResults /><div className="score-info"><CircleHelp size={18} /><div><strong>Como funciona o placar?</strong><p>Consistência, evolução e volume vêm de atividades validadas no servidor. Peso, IMC, gordura corporal, medidas e aparência não participam do ranking. Na premiação as categorias acumulam: quem vence mais de uma recebe todas.</p></div><ChevronRight size={17} /></div></> }
+function RankingPage({ userId }: { userId: string }) { const [rows, setRows] = useState<ScoreRow[]>([]); const [loading, setLoading] = useState(true); useEffect(() => { if (!supabase) { setLoading(false); return }; const load = async () => { const { data: season } = await supabase.from('seasons').select('id, name, start_date').eq('status', 'active').order('start_date', { ascending: false }).limit(1).maybeSingle(); if (!season) { setLoading(false); return }; const { data } = await supabase.from('weekly_scores').select('user_id, consistency_points, evolution_points, volume_points, bonus_points, completed_days, total_points, profiles(full_name, avatar_emoji)').eq('season_id', season.id); const totals = new Map<string, ScoreRow>(); (data ?? []).forEach(item => { const row = item as unknown as ScoreRow; const existing = totals.get(row.user_id) ?? { user_id: row.user_id, consistency_points: 0, evolution_points: 0, volume_points: 0, bonus_points: 0, completed_days: 0, total_points: 0, profiles: row.profiles }; existing.consistency_points += Number(row.consistency_points); existing.evolution_points += Number(row.evolution_points); existing.volume_points += Number(row.volume_points); existing.bonus_points += Number(row.bonus_points); existing.completed_days += Number(row.completed_days); existing.total_points += Number(row.total_points); totals.set(row.user_id, existing) }); setRows([...totals.values()].sort((a, b) => b.total_points - a.total_points)); setLoading(false) }; load() }, []); const position = rows.findIndex(row => row.user_id === userId) + 1; return <><PageTitle eyebrow="PLACAR DA TEMPORADA" title="Quem está se movendo?" detail="Pontuação oficial calculada e validada pelo Supabase." /><div className="your-position"><div><span className="eyebrow">SUA POSIÇÃO</span><h2>{position ? `#${position}` : '-'} <small>de {rows.length} pessoas</small></h2></div><div className="gap-copy"><strong>{rows[position - 2] ? `${(rows[position - 2].total_points - (rows[position - 1]?.total_points ?? 0)).toLocaleString('pt-BR')} pts` : 'No topo'}</strong><span>{rows[position - 2] ? 'para alcançar a posição acima' : 'continue consistente'}</span></div></div><SectionHeading title="Ranking geral" action="Pontuação total" /><div className="leaderboard">{loading ? <p className="admin-empty">Carregando ranking...</p> : rows.map((person, index) => <div className={`rank-row ${person.user_id === userId ? 'current-user' : ''}`} key={person.user_id}><span className="rank-number">{index + 1}</span><span className="rank-avatar">{person.profiles?.avatar_emoji || '✦'}</span><div className="rank-person"><strong>{person.profiles?.full_name ?? 'Participante'}</strong><span><Flame size={13} /> {person.completed_days} dias <i /> {person.consistency_points} pts consistência</span></div><strong className="rank-points">{person.total_points.toLocaleString('pt-BR')} <small>pts</small></strong></div>)}</div><SeasonResults /><div className="score-info"><CircleHelp size={18} /><div><strong>Como funciona o placar?</strong><p>Consistência, evolução e volume vêm de atividades validadas no servidor. Peso, IMC, gordura corporal, medidas e aparência não participam do ranking. Na premiação as categorias acumulam: quem vence mais de uma recebe todas.</p></div><ChevronRight size={17} /></div></> }
 
-function RegisterPage({ activeSession, completedSession, onStarted, onCompleted, onCancelled, onDone }: { onCancelled: () => void; activeSession: ActivitySession | null; completedSession: ActivitySession | null; onStarted: (session: ActivitySession) => void; onCompleted: (session: ActivitySession) => void; onDone: (session: ActivitySession) => void }) { return <><PageTitle eyebrow="CHECK-IN MOVE" title={activeSession ? 'Atividade em andamento.' : completedSession ? 'Atividade concluída.' : 'Qual foi o movimento?'} detail={activeSession ? 'O tempo continua sendo contado pelo horário real do servidor.' : completedSession ? 'Revise os dados antes de enviar para validação.' : 'Comece uma sessão para registrar seu movimento.'} /><ActivitySessionForm activeSession={activeSession} completedSession={completedSession} onStarted={onStarted} onCompleted={onCompleted} onCancelled={onCancelled} onDone={onDone} /></> }
+function RegisterPage({ season, activeSession, completedSession, onStarted, onCompleted, onCancelled, onDone }: { season: CurrentSeason | null; onCancelled: () => void; activeSession: ActivitySession | null; completedSession: ActivitySession | null; onStarted: (session: ActivitySession) => void; onCompleted: (session: ActivitySession) => void; onDone: (session: ActivitySession) => void }) { return <><PageTitle eyebrow="CHECK-IN MOVE" title={activeSession ? 'Atividade em andamento.' : completedSession ? 'Atividade concluída.' : 'Qual foi o movimento?'} detail={activeSession ? 'O tempo continua sendo contado pelo horário real do servidor.' : completedSession ? 'Revise os dados antes de enviar para validação.' : 'Comece uma sessão para registrar seu movimento.'} /><ActivitySessionForm season={season} activeSession={activeSession} completedSession={completedSession} onStarted={onStarted} onCompleted={onCompleted} onCancelled={onCancelled} onDone={onDone} /></> }
 function formatDuration(totalSeconds: number) { const safeSeconds = Math.max(0, totalSeconds); const hours = Math.floor(safeSeconds / 3600).toString().padStart(2, '0'); const minutes = Math.floor((safeSeconds % 3600) / 60).toString().padStart(2, '0'); const seconds = Math.floor(safeSeconds % 60).toString().padStart(2, '0'); return `${hours}:${minutes}:${seconds}` }
 function ActivitySessionForm({ season, activeSession, completedSession, onStarted, onCompleted, onCancelled, onDone }: { season?: CurrentSeason | null; activeSession: ActivitySession | null; completedSession: ActivitySession | null; onStarted: (session: ActivitySession) => void; onCompleted: (session: ActivitySession) => void; onCancelled: () => void; onDone: (session: ActivitySession) => void }) {
   const { user } = useAuth()
@@ -648,7 +613,7 @@ function ActivitySessionForm({ season, activeSession, completedSession, onStarte
   const reachedGoal = elapsed >= 30 * 60
   const start = async () => {
     if (!supabase) { setError('Configure o Supabase para iniciar uma sessão real.'); return }
-    const today = new Date().toISOString().slice(0, 10)
+    const today = moveToday()
     if (!season || season.start_date > today) { setError(season ? `A temporada começa em ${new Date(`${season.start_date}T12:00:00`).toLocaleDateString('pt-BR')}. Seus registros estarão disponíveis a partir do início da temporada.` : 'Nenhuma temporada disponível para registro no momento.'); return }
     if (season.end_date < today) { setError('Esta temporada já foi encerrada.'); return }
     setBusy(true); setError('')
@@ -1844,4 +1809,4 @@ function RegisterModal({ season, activeSession, completedSession, onClose, onSta
 
 export default App
 
-createRoot(document.getElementById('root')!).render(<AuthProvider><App /></AuthProvider>)
+createRoot(document.getElementById('root')!).render(<MoveErrorBoundary><AuthProvider><App /></AuthProvider></MoveErrorBoundary>)
