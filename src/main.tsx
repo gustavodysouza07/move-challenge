@@ -77,7 +77,7 @@ function App() {
 
   useEffect(() => {
     if (!supabase || !user) return
-    supabase.from('activity_sessions').select('id, activity_type, started_at, ended_at, status, duration_seconds, paused_seconds').eq('user_id', user.id).in('status', ['registration', 'active']).maybeSingle().then(({ data }) => setActiveSession(data as ActivitySession | null))
+    supabase.from('activity_sessions').select('id, activity_type, started_at, ended_at, status, duration_seconds, paused_seconds').eq('user_id', user.id).eq('status', 'active').maybeSingle().then(({ data }) => setActiveSession(data as ActivitySession | null))
   }, [user])
 
   useEffect(() => {
@@ -164,7 +164,7 @@ function EnrollmentPage() {
           const { data: activeSeason } = await supabase
             .from('seasons')
             .select('id, name, description, entry_fee, pix_key, start_date, end_date')
-            .in('status', ['registration', 'active'])
+            .eq('status', 'active')
             .lte('start_date', today)
             .gte('end_date', today)
             .order('start_date', { ascending: false })
@@ -639,10 +639,10 @@ function AdminPage() {
   const loadAdminData = async () => {
     if (!supabase) return
     const [seasons, participants, pending, active, paymentResult, activityResult] = await Promise.all([
-      supabase.from('seasons').select('id', { count: 'exact', head: true }).in('status', ['registration', 'active']),
+      supabase.from('seasons').select('id', { count: 'exact', head: true }).eq('status', 'active'),
       supabase.from('season_participants').select('id', { count: 'exact', head: true }),
       supabase.from('season_participants').select('id', { count: 'exact', head: true }).in('status', ['pending_payment', 'pending_approval']),
-      supabase.from('season_participants').select('id', { count: 'exact', head: true }).in('status', ['registration', 'active']),
+      supabase.from('season_participants').select('id', { count: 'exact', head: true }).eq('status', 'active'),
       supabase.from('payments').select('id, amount, payment_status, created_at, proof_url, profiles!payments_user_id_fkey(full_name, email), seasons(name)').in('payment_status', ['pending', 'submitted']).order('created_at', { ascending: true }),
       supabase.from('activity_sessions').select('id, activity_type, started_at, ended_at, duration_seconds, status, source, profiles(full_name, avatar_emoji), activity_proofs(proof_type, storage_path, external_reference)').eq('status', 'pending_validation').order('created_at', { ascending: true }),
     ])
@@ -1152,7 +1152,7 @@ function RankingPage({ userId }: { userId: string }) {
       const { data: season, error: seasonError } = await supabase
         .from('seasons')
         .select('id, name, start_date')
-        .in('status', ['registration', 'active'])
+        .eq('status', 'active')
         .order('start_date', { ascending: false })
         .limit(1)
         .maybeSingle()
@@ -1191,7 +1191,7 @@ function RankingPage({ userId }: { userId: string }) {
           'user_id, profiles!season_participants_user_id_fkey(full_name, avatar_emoji)',
         )
         .eq('season_id', season.id)
-        .in('status', ['registration', 'active'])
+        .eq('status', 'active')
 
       if (!mounted) return
 
@@ -2082,7 +2082,7 @@ function AdminBaselines() {
     if (!supabase || !seasonId) return
     const [baselineResult, countResult] = await Promise.all([
       supabase.from('baseline_metrics').select('id, user_id, average_active_minutes, average_steps, frozen_at, profiles!baseline_metrics_user_id_fkey(full_name)').eq('season_id', seasonId),
-      supabase.from('season_participants').select('id', { count: 'exact', head: true }).eq('season_id', seasonId).in('status', ['registration', 'active']),
+      supabase.from('season_participants').select('id', { count: 'exact', head: true }).eq('season_id', seasonId).eq('status', 'active'),
     ])
     if (baselineResult.error) { setError(baselineResult.error.message); return }
     setError('')
