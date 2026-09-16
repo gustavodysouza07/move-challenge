@@ -1126,7 +1126,7 @@ function HomePage({ userId, season, onNavigate, onRegister, done }: { userId: st
 function Stat({ icon, label, value, accent }: { icon: React.ReactNode; label: string; value: string; accent: string }) { return <div className="stat-card"><span className={`stat-icon ${accent}`}>{icon}</span><span className="stat-label">{label}</span><strong>{value}</strong></div> }
 function MiniChallenge({ icon, tag, title, progress, color, onClick }: { icon: React.ReactNode; tag: string; title: string; progress: string; color: string; onClick: () => void }) { return <button className={`mini-challenge ${color}`} onClick={onClick}><div className="challenge-icon">{icon}</div><span className="eyebrow">{tag}</span><h3>{title}</h3><p>{progress}</p><ChevronRight className="card-arrow" size={18} /></button> }
 
-function RankingPage({ userId }: { userId: string }) {
+function Stat({ userId }: { userId: string }) {
   const [rows, setRows] = useState<ScoreRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -1139,23 +1139,20 @@ function RankingPage({ userId }: { userId: string }) {
     }
 
     let mounted = true
-    let channel: ReturnType<typeof supabase.channel> | null = null
 
     const loadRanking = async () => {
       if (!supabase) return
 
+      setLoading(true)
       setError('')
 
-      /*
-       * 1. Descobre a temporada ativa.
-       */
-      const { data: season, error: seasonError } = await supabase
+      const today = moveToday()
+
+      const { data: seasons, error: seasonError } = await supabase
         .from('seasons')
-        .select('id, name, start_date')
-        .eq('status', 'active')
+        .select('id, name, start_date, end_date, status')
+        .in('status', ['registration', 'active'])
         .order('start_date', { ascending: false })
-        .limit(1)
-        .maybeSingle()
 
       if (!mounted) return
 
@@ -1166,6 +1163,13 @@ function RankingPage({ userId }: { userId: string }) {
         return
       }
 
+      const season =
+        (seasons ?? []).find(
+          item =>
+            item.start_date <= today &&
+            item.end_date >= today,
+        ) ?? null
+
       if (!season) {
         setSeasonName('')
         setRows([])
@@ -1175,71 +1179,52 @@ function RankingPage({ userId }: { userId: string }) {
 
       setSeasonName(season.name)
 
-      /*
-       * 2. Busca TODOS os participantes ativos.
-       *
-       * Este é o ponto principal da correção.
-       * O ranking não parte mais de weekly_scores.
-       * Ele parte de season_participants.
-       *
-       * Assim, quem ainda não possui pontuação também aparece
-       * no ranking com 0 pontos.
-       */
-      const participantResult = await supabase
-        .from('season_participants')
-        .select(
-          'user_id, profiles!season_participants_user_id_fkey(full_name, avatar_emoji)',
-        )
-        .eq('season_id', season.id)
-        .eq('status', 'active')
+      const { data: participants, error: participantsError } =
+        await supabase
+          .from('season_participants')
+          .select(
+            'user_id, profiles!season_participants_user_id_fkey(full_name, avatar_emoji)',
+          )
+          .eq('season_id', season.id)
+          .eq('status', 'active')
 
       if (!mounted) return
 
-      if (participantResult.error) {
+      if (participantsError) {
         setError('Não foi possível carregar os participantes.')
         setRows([])
         setLoading(false)
         return
       }
 
-      /*
-       * 3. Busca as pontuações oficiais.
-       *
-       * A regra de pontuação continua exatamente no Supabase.
-       * Aqui apenas somamos as semanas para obter o total da temporada.
-       */
-      const scoreResult = await supabase
-        .from('weekly_scores')
-        .select(
-          'user_id, consistency_points, evolution_points, volume_points, bonus_points, completed_days, total_points',
-        )
-        .eq('season_id', season.id)
+      const { data: scores, error: scoresError } =
+        await supabase
+          .from('weekly_scores')
+          .select(
+            'user_id, consistency_points, evolution_points, volume_points, bonus_points, completed_days, total_points',
+          )
+          .eq('season_id', season.id)
 
       if (!mounted) return
 
-      if (scoreResult.error) {
+      if (scoresError) {
         setError('Não foi possível carregar a pontuação.')
         setRows([])
         setLoading(false)
         return
       }
 
-      /*
-       * 4. Primeiro criamos uma linha para TODOS os participantes.
-       *
-       * Quem não possui weekly_scores começa com tudo zerado.
-       */
       const totals = new Map<string, ScoreRow>()
 
-      type ParticipantRow = {
-        user_id: string
-        profiles: {
-          full_name: string
-          avatar_emoji: string | null
-        } | null
-      }
+      for (const participant of participants ?? []) {
+        const item = participant as unknown as {
+          user_id: string
+          profiles: {
+            full_name: string
+            avatar_emoji: string | null
+          } | null
+        }
 
-      for (const item of (participantResult.data ?? []) as ParticipantRow[]) {
         totals.set(item.user_id, {
           user_id: item.user_id,
           consistency_points: 0,
@@ -1252,13 +1237,8 @@ function RankingPage({ userId }: { userId: string }) {
         })
       }
 
-      /*
-       * 5. Soma todas as semanas de pontuação.
-       *
-       * Não alteramos nenhuma regra de cálculo.
-       */
-      for (const item of scoreResult.data ?? []) {
-        const row = item as {
+      for (const score of scores ?? []) {
+        const row = score as {
           user_id: string
           consistency_points: number | null
           evolution_points: number | null
@@ -1268,11 +1248,6 @@ function RankingPage({ userId }: { userId: string }) {
           total_points: number | null
         }
 
-        /*
-         * Segurança:
-         * se existir uma pontuação para alguém que não esteja
-         * mais ativo na temporada, ela não entra no ranking.
-         */
         const existing = totals.get(row.user_id)
 
         if (!existing) continue
@@ -1285,23 +1260,15 @@ function RankingPage({ userId }: { userId: string }) {
         existing.total_points += Number(row.total_points ?? 0)
       }
 
-      /*
-       * 6. Ordenação oficial:
-       * maior pontuação primeiro.
-       *
-       * Em caso de empate, mantemos a ordem estável pelo nome.
-       * Isso evita que a posição fique mudando aleatoriamente
-       * quando duas pessoas possuem a mesma pontuação.
-       */
       const ordered = [...totals.values()].sort((a, b) => {
         if (b.total_points !== a.total_points) {
           return b.total_points - a.total_points
         }
 
-        const nameA = a.profiles?.full_name ?? ''
-        const nameB = b.profiles?.full_name ?? ''
-
-        return nameA.localeCompare(nameB, 'pt-BR')
+        return (a.profiles?.full_name ?? '').localeCompare(
+          b.profiles?.full_name ?? '',
+          'pt-BR',
+        )
       })
 
       if (mounted) {
@@ -1310,81 +1277,38 @@ function RankingPage({ userId }: { userId: string }) {
       }
     }
 
-    /*
-     * Primeira carga.
-     */
     void loadRanking()
 
-    /*
-     * 7. Atualização em tempo real.
-     *
-     * weekly_scores:
-     * - atividade validada
-     * - pontos recalculados
-     * - alteração de pontuação
-     *
-     * season_participants:
-     * - novo participante aprovado
-     * - participante removido/bloqueado
-     * - alteração de status
-     */
-    channel = supabase
-      .channel(`ranking-live-${userId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'weekly_scores',
-        },
-        () => {
-          void loadRanking()
-        },
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'season_participants',
-        },
-        () => {
-          void loadRanking()
-        },
-      )
-      .subscribe()
+    const interval = window.setInterval(() => {
+      void loadRanking()
+    }, 30000)
 
     return () => {
       mounted = false
-
-      if (channel) {
-        void supabase.removeChannel(channel)
-      }
+      window.clearInterval(interval)
     }
   }, [userId])
 
-  /*
-   * Posição atual do usuário.
-   */
-  const positionIndex = rows.findIndex(row => row.user_id === userId)
-  const position = positionIndex >= 0 ? positionIndex + 1 : 0
+  const positionIndex = rows.findIndex(
+    row => row.user_id === userId,
+  )
 
-  /*
-   * Participante imediatamente acima.
-   */
-  const personAbove = positionIndex > 0
-    ? rows[positionIndex - 1]
-    : null
+  const position =
+    positionIndex >= 0 ? positionIndex + 1 : 0
 
-  /*
-   * Pontos que faltam para alcançar a posição acima.
-   */
-  const pointsToAbove = personAbove && positionIndex >= 0
-    ? Math.max(
-        0,
-        personAbove.total_points - rows[positionIndex].total_points,
-      )
-    : 0
+  const personAbove =
+    positionIndex > 0
+      ? rows[positionIndex - 1]
+      : null
+
+  const pointsToAbove =
+    personAbove && positionIndex >= 0
+      ? Math.max(
+          0,
+          personAbove.total_points -
+            rows[positionIndex].total_points,
+        )
+      : 0
 
   return (
     <>
@@ -1410,9 +1334,7 @@ function RankingPage({ userId }: { userId: string }) {
 
           <h2>
             {position ? `#${position}` : '-'}
-            <small>
-              {' '}de {rows.length} pessoas
-            </small>
+            <small> de {rows.length} pessoas</small>
           </h2>
         </div>
 
